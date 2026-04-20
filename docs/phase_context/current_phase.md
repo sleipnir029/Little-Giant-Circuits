@@ -1,4 +1,4 @@
-# Current Phase: Phase 0 — Foundation and Constraints
+# Phase 0 — Foundation and Constraints
 
 **Status:** COMPLETE
 **Started:** 2026-04-21
@@ -57,12 +57,40 @@ Do not use this file as a scratch pad. It is a pointer, not a log.
 
 ---
 
-## Phase 1 Transition — Pending
+# Current Phase
 
-Phase 1 (Tiny transformer training) has not yet started. Before it does, the following must happen:
+## Active Phase
+Phase 1 — Tiny Transformer Training
 
-1. **Opus Phase 1 review** — Opus reads `PROJECT_PLAN.md §6 Phase 1` and writes Phase 1 review notes into `review_notes.md`.
-2. **Resolve open questions** — Q1 (package manager), Q2 (PyTorch device), Q3 (Python floor), Q8 (Phase 0.5 tooling) must have recorded decisions in `open_questions.md`.
-3. **Update this file** — Replace this file's content with the Phase 1 phase declaration once the Opus review is done.
+## Objective
+Build tiny transformer training from scratch for controlled toy tasks so the project can study both learning behavior and internal computation.
 
-Until these happen: no `src/` creation, no dependency manifest, no model code.
+## In Scope
+- dataset generators for:
+  - key-value retrieval
+  - induction/copying
+  - modular arithmetic
+  - bracket matching
+  - simple factual lookup
+  - sorting / reversal
+- simple tokenization pipeline
+- tiny transformer implementation in MLX
+- training loop
+- checkpoint saving
+- metrics logging
+- clear task documentation
+- simple validation scripts
+
+## Out of Scope
+- Streamlit visualization
+- detailed activation tracing
+- ablation/patching
+- sparse autoencoders
+- pretrained model integration
+
+## Success Criteria
+- tiny transformer trains successfully on at least one or two toy tasks first
+- code is readable and modular
+- checkpoints and metrics are saved
+- task behavior is documented clearly
+- the project is ready for tracing in Phase 2

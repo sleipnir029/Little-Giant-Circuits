@@ -170,6 +170,207 @@ correction and does not require a proposal. Fix it before the first Phase 1 comm
 
 ## 9. Phase 1 Advisory Notes
 
-*(To be written when the human opens the Phase 1 planning session.
-Opus will read PROJECT_PLAN.md §6 Phase 1, open_questions.md, and current_phase.md,
-then append a new section here before any Phase 1 implementation begins.)*
+*(Superseded by §10 below — written when the human opened the Phase 1 planning session.)*
+
+---
+
+## 10. Phase 1 Advisory Notes (Opus)
+
+**Reviewer role:** advisor / architecture critic (not implementer).
+**Review type:** Pre-implementation phase advisory.
+**Date:** 2026-04-21
+**Subject:** Phase 1 — Tiny Transformer Training.
+
+---
+
+### 10.1 Phase Objective
+
+Build a minimal, inspectable training system for six synthetic toy tasks. The goal is
+not a capable model — it is a transparent one. Every architectural choice should favor
+readability over performance, and every training artifact should be usable in Phase 2
+without format migration.
+
+---
+
+### 10.2 Open Question Resolutions (Q1, Q2, Q3, Q8)
+
+**Q1 — Package manager: pip + venv**
+Lowest magic, easiest to document for learners, no lockfile format bets.
+A single `requirements.txt` with pinned versions is enough for Phase 1.
+Revisit with `uv` if install times become painful in Phase 3+.
+
+**Q2 — PyTorch device target: CPU-only for Phase 2 bridge**
+MPS support in PyTorch is real but has silent op fallbacks. For Phase 2
+interpretability tooling, CPU-only is safer and avoids debugging MPS-specific tensor
+layout issues. Revisit if Phase 4 intervention speed is unacceptable.
+
+**Q3 — Python version floor: 3.11**
+Conservative, safe for current mlx-lm versions. Do not chase 3.12 until an mlx
+release explicitly confirms compatibility.
+
+**Q8 — Tooling: Phase 1 opener, not a separate phase**
+First two commits of Phase 1 set up ruff + pyright (strict: false, basic type coverage).
+No CI in Phase 1 — a GitHub Actions smoke test is Phase 2 scope. This prevents
+undisciplined first-Python without adding phase overhead.
+
+---
+
+### 10.3 Key Risks
+
+**R1 — Architecture too large to inspect (highest risk)**
+A 4-layer, 256-dim transformer trained on toy tasks is not inspectable — it's just
+competent. The architecture must be constrained by design, not by accident.
+Hard limits: ≤2 layers, ≤4 heads, d_model ≤ 64, sequence length ≤ 32, vocab ≤ 64 tokens.
+If a task requires more capacity to learn, the task generator is wrong, not the model limit.
+
+**R2 — Checkpoint format chosen carelessly**
+Phase 5 (checkpoint evolution) and Phase 8 (pretrained bridge) depend on the format
+chosen here. Migrating 50 saved checkpoints mid-project is expensive.
+Use MLX's native `.safetensors` output and save model config (as JSON) alongside every
+checkpoint. This is already HuggingFace-compatible and avoids a migration layer.
+
+**R3 — Metrics that don't serve interpretability**
+Training loss alone tells you nothing useful for Phase 2–5 analysis. Minimum required
+metrics per checkpoint: loss, per-token accuracy, step number. Preferred: also log
+which token positions the model gets right/wrong (for sequence tasks), as this is the
+first signal of circuit formation.
+
+**R4 — Premature framework mixing**
+MLX for training; PyTorch is Phase 2 only. Do not import torch anywhere in Phase 1.
+The bridge is built in Phase 2 after training is stable. Mixing them in Phase 1 creates
+a dependency tangle before the training loop is even verified.
+
+**R5 — Generators too complex**
+If the data generator is complex, it obscures what the model is actually learning.
+Each generator must be readable in under 30 lines. If it isn't, it's doing too much.
+
+**R6 — Training loop monolith**
+A single 400-line train.py that hardcodes everything is unreadable and untestable.
+Separate: model definition, dataset/generator, training loop, config, checkpoint I/O.
+Each file should be understandable in under 5 minutes.
+
+---
+
+### 10.4 Recommended Task Order
+
+Start with induction, verify training, then add tasks one at a time.
+
+1. **Induction/copying** — purest possible task (A B A → B), known to develop induction
+   heads. Best first task: clean verification, fast to train, interpretable from step 1.
+2. **Key-value retrieval** — tests lookup/association; well-studied in mechanistic
+   interpretability literature; useful for Phase 2 circuit tracing.
+3. **Modular arithmetic** — algorithmic transformation; known to develop interesting
+   Fourier-like representations; expect longer training to converge.
+4. **Bracket matching** — introduces structured dependency; requires tracking "open" state;
+   harder to verify without position-level accuracy metrics.
+5. **Sorting / reversal** — position-sensitive; requires cross-token comparison; most
+   complex internal structure of the six.
+6. **Simple factual lookup** — symbolic association; largely overlaps with key-value;
+   implement last because the distinction from task 2 is subtle.
+
+Do not run all six simultaneously in Phase 1. Train them sequentially, confirm each
+reaches >90% accuracy before proceeding, and document what you observe.
+
+---
+
+### 10.5 Implementation Guidance for Sonnet
+
+**Architecture constraints (enforce these in code, not just docs):**
+```python
+# In model config — these are ceilings, not defaults
+MAX_LAYERS = 2
+MAX_HEADS = 4
+MAX_D_MODEL = 64
+MAX_SEQ_LEN = 32
+MAX_VOCAB = 64
+```
+
+**File structure (create exactly these, nothing more in Phase 1):**
+```
+src/
+  models/
+    transformer.py      # <150 lines; one class; no subclasses yet
+  training/
+    train.py            # main entry point: python train.py --task induction
+    loop.py             # training step, optimizer, loss computation
+  datasets/
+    induction.py        # generator + evaluator for induction task
+    kv_retrieval.py     # one file per task
+    modular_arith.py
+    bracket_match.py
+    factual_lookup.py
+    sorting.py
+  utils/
+    config.py           # dataclass for all hyperparameters
+    checkpoint.py       # save/load; weights + config + step + metrics as one unit
+```
+
+**Checkpoint format (implement exactly this):**
+Every checkpoint directory saves four files:
+- `weights.safetensors` — MLX model weights
+- `config.json` — full model config + training config
+- `metrics.json` — loss, accuracy, step at save time
+- `meta.json` — task name, timestamp, git hash
+
+Directory naming: `checkpoints/{task}/{step:07d}/`
+
+**Training loop requirements:**
+- Configurable via command-line args (task, d_model, n_layers, n_heads, lr, steps)
+- Checkpoint every 100 steps by default; configurable
+- Print loss + accuracy every 10 steps; no external logging framework yet
+- A run that hits >95% accuracy on induction within 2000 steps validates the stack
+
+**Tokenizer:**
+Do not use a real tokenizer. Each task defines its own integer vocabulary directly.
+Vocabulary size is a config parameter, not discovered at runtime.
+
+---
+
+### 10.6 Documentation Requirements
+
+Each task module must include:
+- A module-level docstring: what the task tests, expected model behavior,
+  what circuit is expected to form, and the evaluation metric.
+- A `generate(n_samples, seq_len, vocab_size, seed)` function.
+- An `evaluate(model, dataset)` function returning accuracy (float 0–1).
+- A `SAMPLE_DATA` constant showing 3–5 example input/output pairs.
+
+Each training run must produce:
+- A `runs/{task}/{timestamp}/` directory with checkpoint subdirs.
+- A `train_log.txt` with step-by-step loss and accuracy.
+
+Update `docs/phases/phase_1.md` as items are built (not speculatively).
+Append to `implementation_status.md` after each significant commit.
+
+---
+
+### 10.7 Validation Criteria (Phase 1 exit gate)
+
+All must be true before Phase 2 begins:
+
+- [ ] `python train.py --task induction` runs end-to-end without error
+- [ ] Induction model reaches >90% accuracy within 2000 steps
+- [ ] At least two tasks trained and documented (induction + one more)
+- [ ] Checkpoint loading verified: load checkpoint, rerun evaluation, same accuracy
+- [ ] A human unfamiliar with the codebase can read `transformer.py` and explain
+      the forward pass in under 5 minutes
+- [ ] All six task modules exist (generators + evaluators), even if not all trained
+- [ ] `implementation_status.md` reflects what was actually built
+- [ ] `open_questions.md` Q1, Q3, Q8 marked RESOLVED
+
+---
+
+### 10.8 What Not To Do In Phase 1
+
+- Do not implement PyTorch bridge (Phase 2)
+- Do not build Streamlit app (Phase 3)
+- Do not add attention visualization (Phase 2/3)
+- Do not use a pretrained embedding or real tokenizer
+- Do not train models larger than the architecture ceiling
+- Do not add weight decay, dropout, or lr scheduling in Phase 1 — they add noise
+  to the training signal at tiny scale before the loop is even verified
+- Do not train all 6 tasks before task 1 is verified
+- Do not use mlx-lm model classes — the model must be written from scratch;
+  inspectability requires knowing every line of the forward pass
+- Do not add a web interface, REST API, or any serving infrastructure
+- Do not write a Jupyter notebook as the primary artifact — scripts are the deliverable

@@ -5,40 +5,36 @@ Format: status, question, why it matters, which phase it blocks.
 
 ---
 
-## Q1 — Package manager [OPEN — blocks Phase 1]
+## Q1 — Package manager [RESOLVED — 2026-04-21]
 
 **Question:** `uv`, `poetry`, `pip + venv`, or conda?
 
-**Why it matters:** Affects lockfile format, reproducibility story, and how the MLX + PyTorch coexistence is expressed. MLX releases lag behind latest CPython by weeks; the package manager determines how easy it is to pin a working combination.
-
-**Blocks:** Phase 1 (first `src/` code and dependency manifest).
-
-**Options to consider:**
-- `uv` — fast, lockfile-native, growing MLX support
-- `poetry` — stable, well-documented, slightly heavier
-- `pip + venv` — simplest, least magic, easiest to document for learners
+**Resolution:** `pip + venv` with a pinned `requirements.txt`. Lowest magic, easiest
+to document for learners, no lockfile format bets. Revisit `uv` if install times
+become painful in Phase 3+. (Resolved by Opus Phase 1 advisory, §10.2)
 
 ---
 
-## Q2 — PyTorch device target [OPEN — blocks Phase 2]
+## Q2 — PyTorch device target [DECIDED — 2026-04-21, not yet enforced]
 
 **Question:** MPS (Apple GPU), CPU-only, or both?
 
-**Why it matters:** Determines whether PyTorch interpretability bridges can run sizable traces on the M1 Air at reasonable speed, or must stay strictly small. MPS support in PyTorch is real but some ops fall back to CPU silently — worth knowing upfront.
+**Decision:** CPU-only for Phase 2 bridge. MPS has silent op fallbacks that complicate
+interpretability debugging. Revisit if Phase 4 intervention speed is unacceptable.
+(Decided by Opus Phase 1 advisory, §10.2 — enforced when Phase 2 bridge is built)
 
 **Blocks:** Phase 2 (activation capture) and Phase 4 (causal interventions).
 
 ---
 
-## Q3 — Python version floor [OPEN — blocks Phase 1]
+## Q3 — Python version floor [RESOLVED — 2026-04-21]
 
 **Question:** Python 3.11 or 3.12?
 
-**Why it matters:** MLX versions track closely to CPython releases. Too aggressive a floor (3.13) may exclude recent stable mlx-lm versions. 3.11 is the safe conservative choice; 3.12 is reasonable if mlx-lm compatibility is confirmed.
-
-**Blocks:** Phase 1 (dependency manifest and environment setup).
-
-**Current recommendation:** 3.11 (stated in `docs/ENVIRONMENT.md`, not yet enforced).
+**Resolution:** Python 3.11. Conservative, safe for current mlx-lm versions. Do not
+chase 3.12 until an mlx release explicitly confirms compatibility. Enforce in
+`pyproject.toml` or `requires-python` when the manifest is created in Phase 1.
+(Resolved by Opus Phase 1 advisory, §10.2)
 
 ---
 
@@ -91,17 +87,13 @@ Format: status, question, why it matters, which phase it blocks.
 
 ---
 
-## Q8 — Phase 0.5 for tooling? [OPEN — decide before Phase 1]
+## Q8 — Phase 0.5 for tooling? [RESOLVED — 2026-04-21]
 
 **Question:** Should CI, formatting, pre-commit hooks, and linting be a small dedicated phase between 0 and 1, or absorbed at the start of Phase 1?
 
-**Why it matters:** Starting Phase 1 without any linting/formatting means the first real code sets undisciplined precedents. But adding CI setup as a separate gate adds process overhead before anything is built.
-
-**Blocks:** Phase 1 kickoff plan.
-
-**Options:**
-- Phase 0.5 — small dedicated tooling phase (ruff, pyright, GitHub Actions smoke test)
-- Phase 1 opener — first two commits of Phase 1 set up tooling, then model code follows
-- Defer entirely — add tooling reactively when it causes pain
+**Resolution:** Phase 1 opener. First two commits of Phase 1 set up ruff + pyright
+(strict: false, basic type coverage). No GitHub Actions CI in Phase 1 — smoke test is
+Phase 2 scope. Prevents undisciplined first-Python without adding phase overhead.
+(Resolved by Opus Phase 1 advisory, §10.2)
 
 ---

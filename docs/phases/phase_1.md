@@ -40,11 +40,11 @@
 
 From `docs/phase_context/open_questions.md`:
 
-- [ ] **Q1** — Package manager chosen (uv / poetry / pip + venv)
-- [ ] **Q2** — PyTorch device target decided (MPS / CPU-only / both)
-- [ ] **Q3** — Python version floor confirmed (3.11 or 3.12)
-- [ ] **Q8** — Phase 0.5 tooling decision (separate phase or Phase 1 opener)
-- [ ] Opus Phase 1 review notes written into `docs/phase_context/review_notes.md`
+- [x] **Q1** — Package manager: pip + venv (resolved 2026-04-21)
+- [x] **Q2** — PyTorch device target: CPU-only for Phase 2 bridge (decided 2026-04-21)
+- [x] **Q3** — Python version floor: 3.11 (resolved 2026-04-21)
+- [x] **Q8** — Tooling: Phase 1 opener (ruff + pyright, no CI yet) (resolved 2026-04-21)
+- [x] Opus Phase 1 review notes written into `docs/phase_context/review_notes.md §10` (2026-04-21)
 
 ---
 

@@ -27,17 +27,21 @@ These four open questions block Phase 1 start. Resolve them in the next Opus pla
 - Q3: Python version floor (3.11 / 3.12)
 - Q8: Phase 0.5 tooling decision (separate phase or Phase 1 opener)
 
-### 3. Opus writes Phase 1 review notes [start of Phase 1]
+### ~~3. Opus writes Phase 1 review notes~~ [COMPLETE — 2026-04-21]
 
-Trigger: human prompts Opus with the Phase 1 advisor role.
-Opus reads `PROJECT_PLAN.md §6 Phase 1` and appends a clearly-labeled Phase 1 section to `docs/phase_context/review_notes.md`.
-Then update `docs/phase_context/current_phase.md` to reflect Phase 1 as active.
+Written into `docs/phase_context/review_notes.md §10`. Q1, Q2, Q3, Q8 resolved.
+Phase 1 prerequisites in `docs/phases/phase_1.md` all checked.
 
-### 4. Fill in `docs/phases/phase_1.md` prerequisites [after Q answers + Opus review]
+### 3. Begin Phase 1 implementation (Sonnet) [NEXT]
 
-Once Q1–Q8 decisions are recorded and Opus Phase 1 notes are written, update `docs/phases/phase_1.md`:
-- Check off the prerequisites
-- Add the chosen package manager, Python version, and tooling decisions
+All prerequisites met. Sonnet reads `review_notes.md §10` before writing any code.
+
+First two commits:
+1. Tooling commit: `ruff.toml`, `pyrightconfig.json`, `pyproject.toml` (requires-python = ">=3.11"), `requirements.txt` (mlx pinned)
+2. First model commit: `src/models/transformer.py` + `src/utils/config.py` + `src/utils/checkpoint.py`
+
+Then: `src/datasets/induction.py` → `src/training/loop.py` → `src/training/train.py`.
+Train induction task to >90% accuracy before adding any other task.
 
 ---
 
