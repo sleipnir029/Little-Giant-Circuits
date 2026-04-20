@@ -202,3 +202,72 @@ None of these need to be answered to finish Phase 0. They need to be *written do
 ## 9. One-Paragraph Summary for Sonnet
 
 Phase 0 is a documentation-and-scaffolding phase with a surprisingly narrow scope. Build the `docs/phase_context/` loop, create the `docs/proposals/` directory, add an Apache-2.0 `LICENSE`, write a short environment doc and a short workflow doc, stub the three empty `docs/` subdirectories referenced by the README, fix the repo-name inconsistency, and stop. Do not write Python. Do not pin dependencies. Do not scaffold `src/`. The validation is the checklist in §6, not a test suite. When the checklist is green, append a dated entry to `implementation_status.md` and hand back to Opus for an independent verification pass.
+
+---
+
+## 10. Verification Pass — Phase 0 Closure
+
+**Reviewer role:** independent verification (Opus).
+**Date:** 2026-04-21
+**Subject:** Does the Phase 0 implementation satisfy the acceptance gate in §6?
+
+### Method
+
+Independent read of the current repo state against the 12-item checklist in §6. Did not trust `implementation_status.md` as evidence — verified by reading files, running `git status`, and checking for silent additions (hidden CI configs, `src/` scaffolding, dependency manifests, Streamlit stubs, `.gitkeep` files under future source dirs).
+
+### Checklist Result
+
+All 12 items PASS.
+
+| # | Criterion | Status |
+|---|-----------|--------|
+| 1 | Five `phase_context/*.md` files exist and are non-empty | PASS |
+| 2 | `docs/proposals/` with README and `.gitkeep` | PASS |
+| 3 | `LICENSE` present and unmodified Apache-2.0 | PASS |
+| 4 | `docs/ENVIRONMENT.md` — Apple-Silicon scope, PM deferred | PASS |
+| 5 | `docs/WORKFLOW.md` — operational Opus↔Sonnet description | PASS |
+| 6 | `docs/architecture/README.md`, `theory/README.md`, `phases/README.md` | PASS |
+| 7 | No file under `src/` | PASS |
+| 8 | No dependency manifest at repo root | PASS |
+| 9 | No Streamlit app file | PASS |
+| 10 | `README.md` repo-tree says `little-giant-circuits/` | PASS |
+| 11 | `git status` clean; Phase 0 changes committed | PASS |
+| 12 | Fresh reader can state Phase 1 scope from `CLAUDE.md` + `current_phase.md` | PASS |
+
+### Content Quality Notes
+
+Spot-checks where substance matters more than existence:
+
+- **`ENVIRONMENT.md`** — the Apple-Silicon constraint is stated as a deliberate design choice ("MLX is Apple-native and does not run on Linux or Windows. This is a deliberate constraint, not an oversight"), not as a TODO. Correct framing; closes R5.
+- **`WORKFLOW.md`** — contains the governance rules that make the five-file loop actually work: `review_notes.md` is Opus-write / Sonnet-read, `implementation_status.md` is append-only, `open_questions.md` marks RESOLVED rather than deleting. These are the rules that prevent R6 (`current_phase.md` drift).
+- **`open_questions.md`** — 8 questions seeded, 1 resolved (Q7 repo-name), 7 OPEN with clear "blocks which phase" metadata. Q1, Q3, Q8 correctly flagged as Phase 1 blockers.
+- **`proposals/README.md`** — closes R4 (the update mechanism is now real, not just referenced). Workflow is described in operational terms.
+
+### Drift Check
+
+No silent additions found. Specifically verified absent:
+- No `.github/` workflows
+- No `.pre-commit-config.yaml`, `.ruff.toml`, `pyrightconfig.json`, `.python-version`
+- No `src/` directory or anticipatory `.gitkeep` under future source paths
+- No `notebooks/`, `experiments/`, `data/`, `checkpoints/`, `app/` directories
+- No `pyproject.toml`, `requirements*.txt`, `setup.py`, `uv.lock`, `poetry.lock`, `environment.yml`
+- No Python files anywhere in the repo
+
+Repo root contents: `.git/`, `.gitignore`, `CLAUDE.md`, `LICENSE`, `README.md`, `docs/`. Exactly the Phase 0 target.
+
+### Non-Blocking Observations
+
+These do not block Phase 0 closure. They are captured for Phase 1 planning.
+
+1. **Proposal enforcement is documentary, not mechanical.** A contributor could still edit `CLAUDE.md` without a proposal. Consider adding a pre-commit hook check during Phase 1 (ties to Q8). Low priority in a single-author repo.
+2. **`next_actions.md` item 4 does not name an actor.** "Answer Q1, Q2, Q3, Q8 before Phase 1 kickoff" should say *by whom* — implied answer is "in the Phase 1 planning conversation with Opus", but making that explicit removes ambiguity. Cosmetic.
+3. **Q7 resolution left `open_questions.md` with a gap in the numbering flow.** Not a real problem; the RESOLVED status preserves the audit trail correctly.
+
+### Decision
+
+**Phase 0 is APPROVED for closure.** Sonnet may now:
+1. Update `current_phase.md`: `Status: IN PROGRESS` → `Status: COMPLETE`, add `Completed: 2026-04-21`.
+2. Commit the Phase 0 changes with a message referencing the PROJECT_PLAN §6 deliverables.
+3. Open the Phase 1 planning conversation by asking Opus to read `PROJECT_PLAN.md §6 Phase 1` and write fresh Phase 1 review notes.
+
+Do **not** begin any Phase 1 implementation (no `src/`, no dependency manifest, no model code) until the Phase 1 review notes exist and Q1, Q2, Q3, Q8 have decisions recorded.
