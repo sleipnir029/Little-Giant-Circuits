@@ -179,27 +179,33 @@ little-giant-circuits/
 ├── README.md
 ├── LICENSE
 ├── CLAUDE.md
+├── CLAUDE_BOOTSTRAP.md
+├── pyproject.toml          ← added Phase 1
+├── requirements.txt        ← added Phase 1
 ├── docs/
 │   ├── PROJECT_PLAN.md
-│   ├── CLAUDE_BOOTSTRAP.md
+│   ├── ENVIRONMENT.md      ← added Phase 0
+│   ├── WORKFLOW.md         ← added Phase 0
 │   ├── architecture/
 │   ├── theory/
 │   ├── phases/
-│   └── phase_context/
+│   ├── phase_context/
+│   └── proposals/          ← added Phase 0
+├── src/                    ← added Phase 1
+│   ├── models/
+│   ├── training/
+│   ├── datasets/
+│   ├── tracing/            ← Phase 2
+│   ├── interventions/      ← Phase 4
+│   ├── sae/                ← Phase 6
+│   ├── viz/                ← Phase 3
+│   └── utils/
+├── checkpoints/            ← created during training
+├── runs/                   ← created during training
 ├── data/
 │   ├── generated/
 │   └── processed/
 ├── experiments/
-├── checkpoints/
 ├── notebooks/
-├── src/
-│   ├── models/
-│   ├── training/
-│   ├── datasets/
-│   ├── tracing/
-│   ├── interventions/
-│   ├── sae/
-│   ├── viz/
-│   └── utils/
 └── app/
-    └── streamlit_app.py
+    └── streamlit_app.py    ← Phase 3

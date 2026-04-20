@@ -1,0 +1,11 @@
+{
+    "pythonVersion": "3.11",
+    "strict": false,
+    "reportMissingImports": true,
+    "reportMissingTypeStubs": false,
+    "exclude": [
+        ".venv",
+        "checkpoints",
+        "runs"
+    ]
+}

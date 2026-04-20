@@ -1,0 +1,13 @@
+[project]
+name = "little-giant-circuits"
+version = "0.1.0"
+description = "Research + educational lab for training tiny transformers and studying their internals"
+requires-python = ">=3.11"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = ["E501"]

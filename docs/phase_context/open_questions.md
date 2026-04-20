@@ -27,14 +27,19 @@ interpretability debugging. Revisit if Phase 4 intervention speed is unacceptabl
 
 ---
 
-## Q3 — Python version floor [RESOLVED — 2026-04-21]
+## Q3 — Python version floor [RESOLVED — 2026-04-21, updated 2026-04-21]
 
 **Question:** Python 3.11 or 3.12?
 
-**Resolution:** Python 3.11. Conservative, safe for current mlx-lm versions. Do not
-chase 3.12 until an mlx release explicitly confirms compatibility. Enforce in
-`pyproject.toml` or `requires-python` when the manifest is created in Phase 1.
-(Resolved by Opus Phase 1 advisory, §10.2)
+**Original resolution:** Python 3.11. Conservative, safe for current mlx-lm versions.
+Do not chase 3.12 until an mlx release explicitly confirms compatibility.
+
+**Update (Phase 1 implementation):** Python 3.11 is not installed on the host (M1 Air).
+Python 3.12.9 is installed. MLX 0.31.1 on PyPI supports Python 3.12 — this is the
+explicit confirmation the original resolution required before switching. Project runs
+on Python 3.12 in practice. `pyproject.toml` says `requires-python = ">=3.11"`, which
+3.12 satisfies. No conflict with the spirit of the original decision.
+(Updated by Sonnet Phase 1 pre-implementation check, review_notes.md §11.5)
 
 ---
 

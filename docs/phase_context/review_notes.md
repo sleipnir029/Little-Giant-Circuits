@@ -374,3 +374,35 @@ All must be true before Phase 2 begins:
   inspectability requires knowing every line of the forward pass
 - Do not add a web interface, REST API, or any serving infrastructure
 - Do not write a Jupyter notebook as the primary artifact — scripts are the deliverable
+
+---
+
+## 11. Sonnet Phase 1 Pre-Implementation Advisory
+
+**Role:** Sonnet implementer pre-flight check.
+**Date:** 2026-04-21
+**Subject:** Phase 1 — Tiny Transformer Training (pre-coding checkpoint).
+
+### 11.1 Phase Objective (in my own words)
+Build the smallest possible working training system for toy tasks. The goal is a codebase a motivated learner can read in 20 minutes and fully understand — not a system that trains fast or scales. Every file should explain itself.
+
+### 11.2 Environment Facts (verified before writing code)
+- Python 3.12.9 (Python 3.11 not installed; MLX 0.31.1 supports 3.12 — Q3 effectively updated)
+- MLX 0.31.1 available via pip; `mx.save_safetensors`, `nn.value_and_grad`, `mx.load` all confirmed present
+- `model.parameters()` returns a nested dict — requires flatten-to-dot-notation before `mx.save_safetensors`
+- Training pattern: `nn.value_and_grad(model, loss_fn)` → `optimizer.update(model, grads)` → `mx.eval(model.parameters(), loss)`
+- Causal mask: `mx.where(mx.tril(mx.ones((T,T))), 0.0, float("-inf"))` adds to scores — confirmed working
+
+### 11.3 Top Risks
+1. **MLX mutability**: MLX arrays are lazy/functional; `mx.eval()` must be called after each training step or gradients are not materialized. Easy to silently skip.
+2. **Nested parameter dict**: `model.parameters()` nests by module name — must flatten for `save_safetensors`, must un-flatten for `model.update()`.
+3. **Causal mask shape broadcast**: mask is (T, T), scores are (B, H, T, T) — MLX broadcasts correctly but the subtlety is easy to get wrong during debugging.
+4. **Task generator complexity creeping up**: generators must stay under 30 lines each per R5.
+
+### 11.4 Scope Boundaries
+**Build now:** tooling setup, transformer.py, config.py, checkpoint.py, all 6 dataset modules (generator + evaluator), training loop, train.py entry point, README fix.
+**Do not build:** PyTorch bridge, Streamlit, attention visualization, anything requiring `torch`.
+
+### 11.5 Questions Worth Tracking
+- Q3 update: Python 3.12 is the actual runtime (3.11 not installed). `pyproject.toml` will say `requires-python = ">=3.11"` (3.12 satisfies this). Update Q3 in open_questions.md.
+- Checkpoint path: Opus spec says `checkpoints/{task}/{step:07d}/` at repo root. Run logs go in `runs/{task}/{timestamp}/`. These will be separate top-level directories.
