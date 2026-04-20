@@ -175,7 +175,7 @@ Only after toy-model interpretability works reliably.
 ## Repository Structure
 
 ```text
-glassbox-playground/
+little-giant-circuits/
 ├── README.md
 ├── LICENSE
 ├── CLAUDE.md
