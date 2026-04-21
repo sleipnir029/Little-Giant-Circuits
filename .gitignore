@@ -191,6 +191,9 @@ cython_debug/
 # Ruff stuff:
 .ruff_cache/
 
+# Node / frontend
+node_modules/
+
 # Training artifacts (generated; not source)
 checkpoints/
 runs/
