@@ -5,6 +5,106 @@ Each entry: date, what was built, which plan section it satisfies, what remains.
 
 ---
 
+## 2026-04-21 — Phase 3C — React Learn Mode UI (Sonnet)
+
+**What was built:**
+
+React app at `app/react_learn/` (Vite + React 18 + TypeScript, zero charting-library deps):
+- `types.ts` — TypeScript types matching Phase 3B JSON contract exactly
+- `hooks/useLearnData.ts` — fetch manifest, on-demand package fetch, loading/error state
+- `components/StagePlayer.tsx` — playback state (currentIndex, isPlaying, speed); ref+interval
+  for stale-closure-free auto-advance; resets on task change
+- `components/PlaybackControls.tsx` — prev/next/play/pause/reset, 4 speed presets (0.5×–4×)
+- `components/StageExplanation.tsx` — three-block layout with **bold** markdown rendering,
+  "What to notice" amber callout, Streamlit Investigate Mode link per stage
+- `components/ProgressTimeline.tsx` — clickable numbered stage dots
+- `components/StageViz.tsx` — dispatcher on viz.kind
+- `components/viz/HeatmapGrid.tsx` — shared SVG heatmap; sequential (white→indigo) and
+  diverging (blue←0→red) colormaps; labeled row/column axes; caption support
+- `components/viz/BarChart.tsx` — horizontal BarChart + GroupedBarChart for 3-series data
+- `components/viz/TokensViz.tsx` — styled token chips with position labels
+- `components/viz/EmbedNormsViz.tsx` — grouped bar chart (tok/pos/combined norms)
+- `components/viz/AttentionGridViz.tsx` — 2×2 grid of 4 heads; both axes labeled with
+  token_labels; "row attends to column" caption; cell size adapts for T>10
+- `components/viz/MlpHeatmapViz.tsx` — diverging heatmap neurons×positions (top 20 neurons)
+- `components/viz/ResidNormsViz.tsx` — SVG line chart, one colored line per stage_name
+- `components/viz/LogitLensViz.tsx` — P(correct) heatmap + top-k bar at final layer
+- `App.tsx` — header with task selector; task description + model config bar; error UI
+  with exact CLI command when manifest fetch fails; auto-selects induction on load; footer
+  with persistent "→ Investigate Mode in Streamlit" link
+- `app/react_learn/README.md` — run instructions, setup, component tree, known issues
+
+**Validation (in-browser via Playwright):**
+- All 6 tasks load without JS errors ✓
+- All 9 stages of induction task render correctly ✓
+- bracket_match (T=15): no layout overflow ✓
+- factual_lookup (T=1): 1×1 attention heatmaps render without crash ✓
+- Playback: prev/next/play/pause/reset/speed all work ✓
+- Error state: clearly shown with run command when manifest missing ✓
+- Browser console: only favicon 404 (non-issue) ✓
+
+**Decisions:**
+- No charting library — custom SVG for all viz (readable, matches learning-first ethos)
+- `publicDir=project root` — serves `learn_data/` as static assets, no symlink needed
+- Diverging colormap for MLP — activations can be negative; sequential would hide them
+- `useRef` for playback interval — avoids stale closure that would freeze index at 0
+- Paused on load — learner chooses to advance; not auto-playing past unread stage text
+- **bold** markdown rendered via regex split in StageExplanation — no markdown dep needed
+
+**Known issues:**
+- Induction demo trace shows low logit-lens confidence at position 5. Root cause:
+  7-token demo sequence doesn't fully trigger the induction circuit. This is a
+  trace-quality issue (generate_demo_traces.py), not a UI bug.
+- Mobile layout untested.
+
+**Satisfies:** Phase 3C objective — React Learn Mode UI consuming learn_data/ packages.
+
+---
+
+## 2026-04-21 — Phase 3B — React Learn Mode Data Bridge (Sonnet)
+
+**What was built:**
+
+New modules:
+- `src/viz/export_stages.py` — core exporter: loads trace + model, calls `build_stages()` for
+  text fields, computes raw array viz data per stage via 6 `_viz_*` functions, writes a
+  self-contained JSON package. Stage index → viz kind mapping uses offset arithmetic so it
+  stays synchronized with `build_stages()` loop structure.
+- `scripts/export_learn_stages.py` — CLI runner: iterates all 6 tasks, finds demo traces,
+  exports JSON packages to `learn_data/`, writes `learn_data/manifest.json`.
+
+New documentation:
+- `docs/architecture/react_learn_mode.md` — design doc covering: problem statement, 3 options
+  considered (Plotly spec serialization rejected, live API server rejected, static JSON chosen),
+  full JSON schema with all 6 viz kinds and their array shapes, React component contracts,
+  what stays in Streamlit, risks, non-goals.
+
+Generated artifacts (not committed — generated data):
+- `learn_data/manifest.json` — index of all available packages
+- `learn_data/{task}/demo.json` for all 6 tasks
+
+New advisory note:
+- `docs/phase_context/review_notes.md §19` — Phase 3B architecture advisory: serialization
+  problem, recommended architecture, what stays Python, what moves React, why.
+
+**Validation:**
+- All 6 tasks exported: 0 failures
+- `induction/demo.json`: 9 stages, shapes verified (attention `[4][7][7]`,
+  logit_lens prob `[2][7]`, MLP activations `[7][32]`)
+- File size: 50KB per package — within static serving limits
+- `src/viz/export_stages.py` imports verified: no Streamlit, no Plotly runtime dependency
+
+**Satisfies:** Phase 3B objective — Python→React data bridge with semantic array contract.
+
+**Decisions:**
+- Plotly spec serialization (`fig.to_dict()`) explicitly rejected — produces renderer
+  instructions, not semantic data; would couple React to Plotly.js
+- Static JSON chosen over live API — no server, matches project's static-file discipline
+- MLP truncation: top-32 neurons by max-abs-across-positions (256 neurons → 32, ~88% size reduction)
+- `Stage.figure` kept in `stages.py` — Streamlit Learn Mode continues to work unchanged
+
+---
+
 ## 2026-04-21 — Phase 3 Refinement — Narrative Learning Dashboard (Sonnet)
 
 **What was built:**

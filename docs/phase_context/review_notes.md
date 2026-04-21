@@ -1075,3 +1075,273 @@ Stage ordering for a 2-layer model (9 stages):
 
 Each Stage carries: name, explanation, what_changed, what_to_notice,
 next_technical_view (string pointing to Investigate Mode), and a Plotly figure.
+
+---
+
+## 19. Phase 3B Advisory — React Learn Mode Data Bridge
+
+**Role:** Sonnet implementer — architecture advisory before React bridge implementation.
+**Date:** 2026-04-21
+**Subject:** Phase 3B — Why React Learn Mode requires a new data contract and how to build the bridge correctly.
+
+---
+
+### 19.1 The Core Serialization Problem
+
+The Streamlit Learn Mode built in Phase 3 Refinement passes Python `go.Figure` objects
+directly from `stages.py` to `st.plotly_chart()`. This works in Streamlit because both
+sides are in the same Python process.
+
+A React frontend cannot consume `go.Figure` objects. Two naive approaches are both wrong:
+
+1. **`fig.to_dict()` / `fig.to_json()`** — produces a Plotly figure _spec_ (renderer
+   instructions, axis config, trace format), not semantic data. A React app consuming
+   specs would need to import `plotly.js` to render them, coupling the frontend to
+   Plotly's rendering model and producing ~100KB JSON objects per stage for tiny tensors.
+   This is the same problem, restated as JSON.
+
+2. **Serialize raw safetensors to React** — React would need to parse binary tensor format,
+   implement numpy-style indexing, and build its own rendering stack from scratch. Violates
+   the user's explicit constraint and creates an unmaintainable frontend.
+
+**The correct contract**: semantic arrays with a `viz.kind` discriminant. The JSON carries
+the numeric arrays React needs to render the visualization (e.g., `float[H][T][T]` for
+attention), plus a `kind` tag so the React component knows which renderer to use.
+This is framework-agnostic: it does not depend on Plotly, numpy, or MLX.
+
+---
+
+### 19.2 Recommended Architecture — Static JSON Export
+
+```
+Python (exporter)                     React (reader)
+─────────────────────                 ──────────────────────────
+build_stages() → text fields          StagePlayer component
+export_stages() → raw arrays          ├── PlaybackControls
+         │                            ├── StageExplanation
+         ▼                            └── StageViz (dispatches on kind)
+learn_data/{task}/{trace_id}.json         ├── TokensViz
+learn_data/manifest.json                  ├── EmbedNormsViz
+                                          ├── AttentionGridViz
+                                          ├── MlpHeatmapViz
+                                          ├── ResidNormsViz
+                                          └── LogitLensViz
+```
+
+**Key property**: no server required. Python pre-generates JSON; React reads at load time.
+This matches the project's existing static-file pattern (safetensors + JSON meta).
+
+---
+
+### 19.3 What Stays in Python
+
+- All computation: `compute_logit_lens`, `residual_norms`, attention pattern extraction,
+  MLP post-GELU extraction, top-neuron selection
+- All narrative text: `Stage.explanation`, `Stage.what_changed`, `Stage.what_to_notice`,
+  `Stage.next_technical_view` — authored in `stages.py`, serialized as strings
+- Export pipeline: `src/viz/export_stages.py` + `scripts/export_learn_stages.py`
+- Streamlit Investigate Mode: all 6 views unchanged, Streamlit retained as the
+  technical inspection layer
+
+---
+
+### 19.4 What Moves to React
+
+- Learn Mode UI: playback controls, stage navigation, explanation rendering
+- Visualization rendering for Learn Mode stages (using the semantic array contract)
+- Playback state (port of `playback.py` to TypeScript — trivial, ~50 lines)
+- Task/trace selection UI for the React frontend
+
+---
+
+### 19.5 JSON Contract — viz.kind Discriminant
+
+Each stage in the exported JSON has:
+```json
+{
+  "index": 0,
+  "name": "Step 1: Input Tokens",
+  "explanation": "...",
+  "what_changed": "...",
+  "what_to_notice": "...",
+  "next_technical_view": "Token Overview",
+  "viz": {
+    "kind": "tokens",
+    "data": { ... kind-specific arrays ... }
+  }
+}
+```
+
+The six viz kinds and their data contracts:
+
+| kind | key arrays |
+|------|-----------|
+| `tokens` | `positions: int[T]`, `tokens: int[T]`, `token_labels: str[T]` |
+| `embed_norms` | `positions: int[T]`, `token_labels: str[T]`, `tok_norms: float[T]`, `pos_norms: float[T]`, `combined_norms: float[T]` |
+| `attention_grid` | `layer: int`, `n_heads: int`, `token_labels: str[T]`, `patterns: float[H][T][T]` |
+| `mlp_heatmap` | `layer: int`, `token_labels: str[T]`, `top_neuron_indices: int[k]`, `activations: float[T][k]` |
+| `resid_norms` | `highlight_layer: int\|null`, `token_labels: str[T]`, `stage_names: str[]`, `norms: {stage_name: float[T]}` |
+| `logit_lens` | `layer_labels: str[]`, `token_labels: str[T]`, `actual_nexts: int[T]`, `actual_next_labels: str[T]`, `prob_of_actual_next: float[n_layers][T]`, `top_k_final: {position, k, token_ids, token_labels, probs}` |
+
+**MLP truncation**: `d_model=64` → 256 neurons. Export top-32 by max abs activation
+across positions. `activations` shape: `float[T][32]`. Saves ~88% of MLP data.
+
+---
+
+### 19.6 Why This Best Serves Learning-First
+
+The learning-first constraint (PROJECT_PLAN §2) requires the UI to explain, sequence, and
+guide — not just render tensors. A React frontend built on semantic arrays can:
+
+1. Highlight specific cells (e.g., the induction diagonal) based on task metadata,
+   without re-running Python to regenerate a new Plotly figure
+2. Animate between stages without a server round-trip
+3. Show custom tooltips with the `what_to_notice` text overlaid on specific chart elements
+4. Run entirely offline — the JSON package is the only dependency
+
+None of these are achievable with Plotly spec serialization. The semantic array contract
+is what makes React's rendering flexibility useful for pedagogy.
+
+---
+
+### 19.7 What Must Not Change
+
+- `src/viz/stages.py` — not modified; `Stage.figure` field retained for Streamlit
+- `src/viz/loading.py` — not modified; `compute_logit_lens`, `residual_norms` reused by exporter
+- `app/views/` — all 6 Investigate Mode views unchanged
+- `app/learn/learn_mode.py` — Streamlit Learn Mode retained as reference and fallback
+- `src/tracing/` — Phase 2 format locked; exporter reads it, doesn't change it
+
+---
+
+### 19.8 Scope Boundary
+
+**Phase 3B builds the bridge only:** exporter, JSON contract, one example output, manifest.
+**Phase 3B does not build the React app.** The React app is Phase 3C (or Phase 4 depending
+on what the user decides after reviewing the bridge output).
+
+React app scaffolding, `package.json`, component files, and bundler config are explicitly
+out of scope for this phase. The bridge is complete when:
+- `learn_data/induction/demo.json` exists and validates against the schema
+- `learn_data/manifest.json` lists all available packages
+- A human can read the JSON and understand the data contract without documentation
+
+---
+
+## 20. Phase 3C Advisory — React Learn Mode UI
+
+**Reviewer role:** Sonnet implementer — pre-implementation advisory.
+**Date:** 2026-04-21
+**Subject:** Phase 3C — React Learn Mode frontend against the Phase 3B JSON contract.
+
+---
+
+### 20.1 UI Goal (plain terms)
+
+Build a React app that loads a pre-exported JSON package from `learn_data/` and lets a user
+step through a transformer forward pass one stage at a time. Each stage shows a plain-language
+explanation and a focused visualization. The learner never sees raw tensor data — only labeled,
+oriented charts derived from the semantic arrays in the package. Streamlit remains the technical
+inspection layer; React is the guided explainer layer.
+
+---
+
+### 20.2 Minimum Viable Architecture
+
+```
+App
+├── Header (task selector dropdown)
+└── StagePlayer (owns playback state: currentIndex, isPlaying, speed)
+    ├── ProgressTimeline (dots/icons for all 9 stages)
+    ├── [2-column layout]
+    │   ├── StageExplanation (explanation, what_changed, what_to_notice, link)
+    │   └── StageViz (dispatches on viz.kind → 6 renderers)
+    └── PlaybackControls (prev, next, play/pause, reset, speed slider, jump select)
+```
+
+**Stack:** Vite + React 18 + TypeScript. No charting library — custom SVG for all visualizations.
+Data is small (T ≤ 32, H = 4, k = 32); SVG heatmaps are 20–40 lines each and stay readable.
+
+**Data access:** `public/learn_data/` symlink to `../../learn_data/`. One-time setup command.
+`fetch('/learn_data/manifest.json')` loads the index. Package loaded on task selection.
+
+**Playback state:** `currentIndex`, `isPlaying`, `speed` (ms/stage). `useEffect` interval
+drives auto-advance. Speed slider ranges 0.5×–4× (2000ms–250ms). Paused on first load.
+
+---
+
+### 20.3 Main UX Risks
+
+**R1 — Heatmap orientation confusion.** Attention grid: if row/column axes are unlabeled,
+learner cannot tell "which token attends to which." Always show token labels on both axes.
+For large T (bracket_match T=15), label every other token.
+
+**R2 — Auto-play too fast.** Default to paused state. Speed default: 1× (1500ms/stage).
+If a learner mis-clicks play, they can pause and go back — but only if reset is visible.
+
+**R3 — Explanation wall.** Three text blocks (explanation, what_changed, what_to_notice)
+can feel like reading a manual. Separate them visually: explanation as normal text,
+what_changed as a small muted note, what_to_notice as a highlighted callout box.
+
+**R4 — Stage name unclear during viz.** The stage title ("Step 3 of 9: Layer 0 — Attention")
+must be visible above the visualization, not just in the controls bar.
+
+**R5 — factual_lookup edge case.** T=1 means single-token sequences. Some viz (attention 1×1,
+resid_norms with 1 position) will render as trivially small charts. This is correct — document
+it as "trivially simple task" rather than treating it as a bug.
+
+---
+
+### 20.4 What Must Be Built Now
+
+- `app/react_learn/` — complete Vite + React + TypeScript project
+- `types.ts` — TypeScript types matching the Phase 3B JSON contract exactly
+- `useLearnData.ts` — fetch manifest, fetch selected package, loading/error state
+- `StagePlayer.tsx` — playback state, layout, auto-advance interval
+- `PlaybackControls.tsx` — prev/next/play/pause/reset/speed/jump
+- `StageExplanation.tsx` — three text blocks + technical view link
+- `ProgressTimeline.tsx` — visual stage indicator (all 9 stages, current highlighted)
+- `StageViz.tsx` — kind discriminator
+- `TokensViz.tsx`, `EmbedNormsViz.tsx`, `AttentionGridViz.tsx`
+- `MlpHeatmapViz.tsx`, `ResidNormsViz.tsx`, `LogitLensViz.tsx`
+- Shared SVG primitives: `HeatmapGrid.tsx`, `BarChart.tsx`
+- Run instructions in `app/react_learn/README.md`
+
+---
+
+### 20.5 What Must NOT Be Built Now
+
+- Ablation, patching, "what if you zeroed head X" — Phase 4
+- Custom token input (user types a sequence, model runs) — Phase 4
+- Checkpoint selector (compare across training steps) — Phase 5
+- Multiple charting library integrations — pick SVG and stop
+- Server or API backend — JSON files are sufficient
+- Rebuild of the Streamlit technical inspector in React — wrong direction
+- Cursor-level polish, animations, transitions — functional first
+
+---
+
+### 20.6 Learning-First Alignment
+
+The frontend must not re-derive interpretability logic. All stage text (explanation,
+what_to_notice) is authored in Python and baked into the JSON package. React renders it.
+Viz components read semantic arrays (not raw tensors) and apply labels from the JSON.
+The `next_technical_view` field links back to Streamlit by name — this keeps the two
+UIs as complementary layers, not competing tools.
+
+Every viz component must show orientation cues (axis labels, legend, units) by default.
+A learner should not need to figure out what the axes represent; the chart must tell them.
+
+---
+
+### 20.7 Validation Plan
+
+1. `npm run dev` starts without errors
+2. Manifest loads; all 6 tasks appear in task selector
+3. Induction demo: all 9 stages render without JS errors
+4. Playback: prev/next advance correctly; play/pause toggles auto-advance; reset returns to 0
+5. Speed slider: changing speed changes auto-advance interval
+6. AttentionGridViz for induction: 4 heads visible; tokens labeled on both axes
+7. LogitLensViz final stage: top-k bar shows correct prediction (token "7" at high confidence)
+8. factual_lookup: T=1 renders without crash
+9. Browser console: zero uncaught errors across all 6 tasks

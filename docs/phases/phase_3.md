@@ -301,3 +301,181 @@ All Phase 3 (original) deliverables are preserved:
   others use generic language)
 - Bottom navigation buttons use `st.rerun()` — verify this doesn't cause
   flicker on slower hardware
+
+---
+
+# Phase 3B — React Learn Mode Data Bridge
+
+**Status:** COMPLETE
+**Started:** 2026-04-21
+**Completed:** 2026-04-21
+
+## Motivation
+
+The Streamlit Learn Mode passes Python `go.Figure` objects to `st.plotly_chart()`. This
+works within one Python process but cannot be consumed by a React frontend. Phase 3B
+defines and implements a clean data bridge: a static JSON export pipeline that produces
+React-ready packages with semantic numeric arrays (not Plotly specs).
+
+The full architecture decision is documented in `docs/architecture/react_learn_mode.md`.
+
+## What Was Built
+
+### New modules
+
+- `src/viz/export_stages.py` — core exporter
+  - `export_stages(trace_dir, out_path)` — loads trace + model, calls `build_stages()`
+    for text fields, computes raw array viz data per stage, writes JSON package
+  - Six `_viz_*` functions, one per viz kind:
+    `_viz_tokens`, `_viz_embed_norms`, `_viz_attention_grid`,
+    `_viz_mlp_heatmap`, `_viz_resid_norms`, `_viz_logit_lens`
+  - Stage index → viz kind mapping via offset arithmetic (`offset // 3`, `offset % 3`)
+  - MLP truncation: top-32 neurons by max abs activation across positions
+
+- `scripts/export_learn_stages.py` — CLI runner
+  - Iterates all 6 tasks, finds demo traces, exports JSON packages
+  - Writes `learn_data/manifest.json` with metadata for all packages
+
+### Generated artifacts
+
+- `learn_data/manifest.json` — index of all available packages
+- `learn_data/{task}/demo.json` for all 6 tasks (induction: 50KB)
+
+### New documentation
+
+- `docs/architecture/react_learn_mode.md` — design doc: problem statement,
+  options considered, chosen architecture, full JSON schema, React component contracts,
+  what stays in Streamlit, risks, non-goals
+
+## The JSON Contract
+
+Each package is self-contained: task name, model shape, token labels, 9 stages.
+Each stage carries plain-language text + a `viz` object with `kind` discriminant + `data`.
+
+| Stage | viz.kind |
+|-------|---------|
+| Input Tokens | `tokens` |
+| Embeddings | `embed_norms` |
+| Layer N — Attention | `attention_grid` |
+| Layer N — MLP | `mlp_heatmap` |
+| After Layer N — Residual | `resid_norms` |
+| Final Prediction | `logit_lens` |
+
+## Validation
+
+- All 6 tasks exported successfully (0 failures)
+- `induction/demo.json`: 9 stages, shapes verified:
+  - `attention_grid.patterns`: `[4][7][7]` (4 heads, T=7)
+  - `logit_lens.prob_of_actual_next`: `[2][7]` (2 layers, T=7)
+  - `mlp_heatmap.activations`: `[7][32]` (T=7, top-32 neurons)
+- File sizes: 50KB (induction) — well within static serving limits
+
+## What Was Not Changed
+
+- `src/viz/stages.py` — not modified; `Stage.figure` retained for Streamlit
+- `src/viz/loading.py` — not modified; `compute_logit_lens`, `residual_norms` reused
+- `app/views/`, `app/learn/` — all Streamlit views unchanged
+- `src/tracing/` — Phase 2 format unchanged
+
+## What Comes Next (Phase 3C / Phase 4 decision)
+
+Phase 3B is the bridge — it produces data but no React app. The next decision is:
+- **Phase 3C**: Build the React Learn Mode app consuming `learn_data/`
+- **Phase 4**: Start causal interventions (ablation, patching) in Streamlit first,
+  then add React rendering in a later pass
+
+The bridge is complete and independent of this decision. The JSON contract is stable.
+
+---
+
+## Phase 3C — React Learn Mode UI
+
+**Status:** COMPLETE
+**Started:** 2026-04-21
+**Completed:** 2026-04-21
+
+### Objective
+
+Build a React frontend that consumes `learn_data/` packages and presents the forward-pass
+walkthrough as a guided explainer with playback controls and focused visualizations.
+
+### What Was Built
+
+**React app:** `app/react_learn/` (Vite + React 18 + TypeScript, zero charting-library deps)
+
+```
+app/react_learn/
+  index.html
+  package.json          — react, react-dom; vite + ts as devDeps only
+  vite.config.ts        — publicDir=project root (serves learn_data/ as static assets)
+  tsconfig.json
+  src/
+    main.tsx
+    App.tsx             — header, task selector, error UI with run command, footer
+    types.ts            — TypeScript types matching Phase 3B JSON contract exactly
+    hooks/
+      useLearnData.ts   — fetch manifest, on-demand package loading, error state
+    components/
+      StagePlayer.tsx   — owns playback state (currentIndex, isPlaying, speed)
+      PlaybackControls.tsx  — prev/next/play/pause/reset, 4 speed presets
+      StageExplanation.tsx  — explanation + what_to_notice callout + Streamlit link
+      ProgressTimeline.tsx  — clickable stage dots (1-9), current highlighted
+      StageViz.tsx      — dispatches on viz.kind to 6 renderers
+      viz/
+        HeatmapGrid.tsx     — shared SVG heatmap (sequential + diverging colormaps)
+        BarChart.tsx        — shared horizontal BarChart + GroupedBarChart
+        TokensViz.tsx
+        EmbedNormsViz.tsx
+        AttentionGridViz.tsx — 2×2 grid of 4 heads, both axes labeled
+        MlpHeatmapViz.tsx    — diverging colormap (activations can be negative)
+        ResidNormsViz.tsx    — SVG line chart, one line per stage_name
+        LogitLensViz.tsx     — P(correct) heatmap + final layer top-k bar
+  README.md
+```
+
+### Key Design Decisions
+
+- **No charting library** — all viz is custom SVG. Data is small (T≤32, k=32); SVG is
+  readable source code that matches the learning-first ethos.
+- **Diverging colormap for MLP** — MLP post-GELU activations can be negative; sequential
+  blue would make negative neurons invisible.
+- **Ref + interval for auto-play** — `useRef(currentIndex)` avoids stale closure in
+  `setInterval`; each tick reads current index without triggering effect re-registration.
+- **publicDir = project root** — serves `learn_data/` as static assets without symlinks,
+  copies, or proxy config.
+- **Auto-select induction on load** — the canonical induction-head demo is the most
+  educationally valuable starting point.
+- **Playback paused on load** — learner must choose to advance; auto-play at full speed
+  would skip stage text before it's read.
+
+### Validation Results
+
+| Check | Result |
+|-------|--------|
+| `npm run dev` starts without errors | PASS |
+| Manifest loads; all 6 tasks in selector | PASS |
+| Induction demo: all 9 stages render, no JS errors | PASS |
+| prev/next/play/pause/reset/speed all work | PASS |
+| AttentionGridViz: 4 heads, both axes labeled | PASS |
+| LogitLensViz stage 9 renders top-k bar | PASS |
+| factual_lookup T=1: no crash | PASS |
+| bracket_match T=15: no layout overflow | PASS |
+| Browser console: only favicon 404 (non-issue) | PASS |
+
+### Known Issues
+
+1. **Induction demo trace confidence is low** — the 7-token demo sequence doesn't
+   fully trigger the induction circuit at position 5. This is a trace data quality
+   issue (generate_demo_traces.py), not a UI bug. A longer demonstration sequence
+   (T=16, clear A B repetition) would show stronger signal in the logit lens.
+
+2. **Mobile layout** — not tested or optimized; two-column layout breaks below 600px.
+
+### What Stays in Streamlit
+
+- `app/streamlit_app.py` — entry point with Learn/Investigate toggle (unchanged)
+- `app/views/` — all 6 Investigate Mode views (unchanged)
+- `app/learn/learn_mode.py` — Streamlit Learn Mode (retained as reference)
+- `src/viz/stages.py`, `src/viz/plotting.py` — unchanged
+
+React adds a second frontend; it does not replace Streamlit.

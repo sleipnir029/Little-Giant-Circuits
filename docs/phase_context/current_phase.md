@@ -1,14 +1,34 @@
 # Current Phase
 
 ## Active Phase
-Phase 3 Refinement — Narrative Learning Dashboard
+Phase 3C — React Learn Mode UI
 
-**Status:** IN PROGRESS
+**Status:** COMPLETE
 **Started:** 2026-04-21
-**Refinement started:** 2026-04-21
-**Note:** Phase 3 technical UI is COMPLETE (2026-04-21) but is insufficient as the
-          primary learning interface. This refinement adds Learn Mode on top without
-          modifying any existing Investigate Mode views or data pipelines.
+**Completed:** 2026-04-21
+
+**Predecessor phases:**
+- Phase 3 technical UI: COMPLETE (2026-04-21)
+- Phase 3 Refinement (Streamlit Learn Mode): COMPLETE (2026-04-21)
+- Phase 3B (React data bridge): COMPLETE (2026-04-21)
+
+**Objective:**
+Build a React-based learner-first dashboard that consumes the exported staged JSON packages
+and lets a user watch and understand model computation step by step.
+
+**Advisory:** `review_notes.md §20`
+
+---
+
+## Phase 3B Summary
+
+Phase 3B built the Python→React data bridge:
+- `src/viz/export_stages.py` — core exporter (semantic arrays, not Plotly specs)
+- `scripts/export_learn_stages.py` — CLI to regenerate all packages
+- `learn_data/` — generated JSON packages for all 6 tasks
+- `docs/architecture/react_learn_mode.md` — full design doc + JSON schema
+
+The Streamlit app (both Investigate Mode and Learn Mode) is unchanged and working.
 
 ---
 
