@@ -5,6 +5,35 @@ Each entry: date, what was built, which plan section it satisfies, what remains.
 
 ---
 
+## 2026-04-21 — Phase 2 Complete — Tracing Foundation (Sonnet)
+
+**What was built:**
+- `src/models/transformer.py` — `return_cache: bool = False` added to all three `__call__` methods;
+  captures: Q/K/V projections, pre-softmax scores, post-softmax patterns, attn output, residual
+  stream pre/mid/post, MLP pre/post/output, final LN input, logits. Training code unchanged (default path).
+- `src/tracing/__init__.py` — public API: `trace`, `ActivationCache`, `save_trace`, `load_trace`
+- `src/tracing/cache.py` — `ActivationCache` with TransformerLens-style dot-key access; `flat()` for serialization
+- `src/tracing/tracer.py` — `trace(model, tokens)` → materialized `(logits, ActivationCache)` via `mx.eval`
+- `src/tracing/export.py` — `save_trace` / `load_trace`; format: `activations.safetensors` + `trace_meta.json`
+- `scripts/trace_prompt.py` — CLI demo: loads checkpoint, traces, prints patterns/predictions/norms, saves trace
+
+**Validation (induction task):**
+- Anti-drift check: PASSED (max diff < 1e-5)
+- Save/load round-trip: PASSED
+- Induction circuit visible: positions 8-14 predict correct tokens at 99%+
+- Layer 0 Heads 1-3 show "previous token" head pattern
+- 29 cache keys, all correct shapes
+
+**Satisfies:** `PROJECT_PLAN.md §6 Phase 2` — activation cache, prompt runner, trace export, comparison-ready structures.
+
+**Decisions:**
+- `return_cache` flag over separate tracer class — one forward pass, no drift risk
+- TransformerLens-style naming — `blocks.{i}.attn.{scores|pattern}` throughout
+- `mx.eval` in `trace()` — materializes lazy graphs before return (prevents stale cache)
+- No PyTorch bridge — MLX tracing is fully sufficient for Phase 2
+
+---
+
 ## 2026-04-21 — Phase 1 Formally Closed with §12 Waiver (Sonnet, finalization pass)
 
 **Phase 2 activation rescinded.** The entry below ("Phase 1 CLOSED / Phase 2 ACTIVATED")

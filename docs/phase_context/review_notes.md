@@ -655,3 +655,148 @@ Changes made in this pass (documentation only — no `src/` changes):
 - Existing history entries in `implementation_status.md` — append-only; preserved
 - `docs/phases/phase_0.md` — already complete; untouched
 - §1–§14 of this file — existing review record preserved
+
+---
+
+## 16. Phase 2 Advisory Notes (Sonnet, pre-implementation)
+
+**Role:** Sonnet implementer — pre-implementation advisory.
+**Date:** 2026-04-21
+**Subject:** Phase 2 — Tracing Foundation.
+
+---
+
+### 16.1 Phase Objective (in my own words)
+
+Make a single forward pass fully inspectable: given a trained checkpoint and a token
+sequence, capture every intermediate tensor — embeddings, QKV projections, attention
+scores and patterns, MLP activations, residual stream states, final logits — into a
+clean in-memory structure that can be saved to disk and consumed by Phase 3 visualization
+without redesign.
+
+---
+
+### 16.2 Key Design Decision — Q5 Resolved
+
+**Resolution: Option (A) — `return_cache` flag threaded through the forward pass.**
+
+MLX has no `register_forward_hook` equivalent. A wrapper class that intercepts
+"at module boundaries" sounds clean but is not actually possible without either
+re-implementing the math or modifying the module — the Q, K, V arrays and `scores`
+only exist inside `MultiHeadSelfAttention.__call__`; they are not accessible from
+outside. There are two real options:
+
+- **(A) `return_cache` parameter** in `__call__` of `MultiHeadSelfAttention`,
+  `TransformerBlock`, and `Transformer`. When `True`, return `(output, cache_dict)`.
+  Minimal Phase 1 code change; one source of truth for the forward pass; readable.
+- **(B) `TracedTransformer`** that reimplements the forward pass with explicit capture.
+  Zero Phase 1 code changes but duplicates math that can drift silently.
+
+**Option (A) is chosen.** Phase 1 instructions said "minimal changes to model code
+required for readable tracing" — this implies modification is expected, not forbidden.
+A duplicated forward pass that drifts is a worse risk than a flag.
+
+**Anti-drift guarantee:** a test must assert `model(x)` == `model(x, return_cache=True)[0]`
+bit-for-bit. This is the correctness anchor for every later phase.
+
+---
+
+### 16.3 Key Design Decision — Q9 Resolved
+
+**In-memory:** `ActivationCache` — thin wrapper around the nested raw cache dict;
+supports dot-key access (`cache["blocks.0.attn.scores"]`); has a `flat()` method
+that reuses `checkpoint.py`'s `_flatten` helper.
+
+**On-disk:** Two files per trace (matching the 4-file Phase 1 checkpoint pattern):
+- `activations.safetensors` — flat tensor dict via `mx.save_safetensors`
+- `trace_meta.json` — checkpoint path, task, input tokens (as list), seq_len, vocab,
+  timestamp, git hash
+
+**Dtype:** `float32` everywhere. MLX uses `float32` by default; no bfloat16 conversion
+needed for this model size.
+
+**Naming convention:** TransformerLens-style flat dotted keys:
+```
+embed.tok             (B, T, d_model)   — token embeddings
+embed.pos             (T, d_model)      — positional embeddings (no batch dim)
+embed.combined        (B, T, d_model)   — tok + pos
+blocks.0.resid_pre    (B, T, d_model)   — residual stream before block 0
+blocks.0.attn.q       (B, H, T, Dh)    — Q projections, all heads
+blocks.0.attn.k       (B, H, T, Dh)
+blocks.0.attn.v       (B, H, T, Dh)
+blocks.0.attn.scores  (B, H, T, T)     — post-causal-mask, pre-softmax
+blocks.0.attn.pattern (B, H, T, T)     — post-softmax attention weights
+blocks.0.attn.output  (B, T, d_model)  — attention output after out-projection
+blocks.0.resid_mid    (B, T, d_model)  — after attn, before MLP
+blocks.0.mlp.pre      (B, T, 4*d_model) — after mlp1, before GELU
+blocks.0.mlp.post     (B, T, 4*d_model) — after GELU, before mlp2
+blocks.0.mlp.output   (B, T, d_model)  — MLP contribution, after mlp2
+blocks.0.resid_post   (B, T, d_model)  — residual stream after block
+...
+ln_f.input            (B, T, d_model)  — input to final LayerNorm
+logits                (B, T, vocab)    — final output
+```
+
+---
+
+### 16.4 Top Risks
+
+**R1 — Unmaterialized lazy arrays in the cache (highest risk)**
+MLX is lazy by default. If `mx.eval(cache_tensors)` is not called before the
+trace function returns, the cache contains lazy computation graphs. Serialization
+then triggers evaluation — fine on its own, but if the model was also used for
+training in the same session, the lazy graph may reference freed buffers. Fix:
+call `mx.eval()` on all cache tensors immediately before returning.
+
+**R2 — `scores` naming collision between pre-softmax and post-softmax**
+The current transformer.py names both variables `scores` within the same function
+(pre-softmax = raw logits; post-softmax = `attn`). Must be explicit: save `scores`
+as post-causal-mask pre-softmax, and `pattern` as post-softmax. Both are needed:
+`scores` tells you what the model "wants" to attend to; `pattern` tells you what
+it actually does.
+
+**R3 — `return_cache=True` branch must never run during training**
+`loss_fn` in `loop.py` calls `model(x)` — the two-return-value path must only
+trigger when explicitly requested. The `return_cache=False` default satisfies this,
+but confirm by reading `loss_fn` uses `model(x)` not `model(x, return_cache=True)`.
+
+**R4 — Tracing script finds no checkpoint if directory is empty**
+The trace script must fail clearly if no checkpoint is found, not silently
+produce a zero-initialized model trace.
+
+---
+
+### 16.5 What Must Be Built Now
+
+1. Modify `src/models/transformer.py` — add `return_cache` to all three `__call__` methods
+2. Create `src/tracing/__init__.py` — public API surface
+3. Create `src/tracing/cache.py` — `ActivationCache` wrapper
+4. Create `src/tracing/tracer.py` — `trace(model, tokens)` function
+5. Create `src/tracing/export.py` — `save_trace` and `load_trace`
+6. Create `scripts/trace_prompt.py` — runnable CLI demo
+7. Create `docs/phases/phase_2.md` — phase writeup
+
+---
+
+### 16.6 What Must Not Be Built Now
+
+- No Streamlit UI or visual dashboards (Phase 3)
+- No ablation or activation patching (Phase 4)
+- No PyTorch bridge (not needed; MLX tracing is viable)
+- No sparse autoencoder work (Phase 6)
+- No pretrained model integration (Phase 8)
+- No speculative Phase 3 abstractions pre-built "for convenience"
+
+---
+
+### 16.7 Validation Plan
+
+Use the induction task — 100% converged, clearest expected circuit:
+1. Load the latest induction checkpoint
+2. Construct a known induction sequence (e.g., `[3, 7, 3]`)
+3. Run `trace(model, tokens)` — verify no errors, cache is non-empty
+4. Assert `logits == model(tokens)` bit-for-bit (anti-drift test)
+5. Print top-3 predicted tokens at position 2 — should include token 7
+6. Check that `blocks.0.attn.pattern` shows the model attending to position 0
+   from position 2 (the expected induction head behavior)
+7. Verify save → load round-trip: saved and loaded tensors must match

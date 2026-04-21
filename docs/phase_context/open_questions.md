@@ -53,34 +53,19 @@ on Python 3.12 in practice. `pyproject.toml` says `requires-python = ">=3.11"`, 
 
 ---
 
-## Q5 — Tracing framework [OPEN — PHASE 2 BLOCKER — RESOLVE BEFORE CODING]
+## Q5 — Tracing framework [RESOLVED — 2026-04-21]
 
 **Question:** Custom MLX hooks, PyTorch hooks, or an NNsight-style abstraction?
 
-**Why it matters:** This is the highest-consequence decision in the interpretability stack.
-Phase 2 design, Phase 3 visualization, Phase 4 interventions, Phase 6 SAE, and Phase 7
-runtime lab all depend on how activations are captured. The wrong choice here spreads
-across every subsequent phase.
+**Resolution:** MLX-native `return_cache` flag threaded through `__call__` in
+`MultiHeadSelfAttention`, `TransformerBlock`, and `Transformer`. When `return_cache=True`,
+returns `(output, nested_cache_dict)`. Default `return_cache=False` is unchanged — training
+code is unaffected. Anti-drift test asserts `model(x) == trace(x)[0]` bit-for-bit.
 
-**Key constraint:** MLX has no `register_forward_hook` equivalent. This is not a minor
-difference — it changes which options are viable without touching `transformer.py`.
+PyTorch bridge was not needed for Phase 2. If Phase 4 interventions require hook-based
+patching that MLX can't support cleanly, revisit Q2 (CPU-only PyTorch device) then.
 
-**Blocks:** Phase 2 (tracing infrastructure). Must be resolved before any Phase 2 code is written.
-
-**Options:**
-- **MLX-native with optional cache dict:** Add `return_cache: bool = False` flag to the
-  transformer's `__call__`. When set, return `(logits, cache_dict)` where cache_dict
-  contains intermediate tensors. No PyTorch dependency; keeps everything in MLX.
-  Downside: changes `transformer.py` interface; tracing logic lives inside the model.
-- **Wrapper class (preferred if clean):** Create `src/tracing/tracer.py` that wraps the
-  existing model, calls forward, and intercepts/captures outputs at each module boundary
-  using MLX's functional design. Keeps `transformer.py` unchanged.
-- **PyTorch CPU bridge:** Convert MLX weights to PyTorch format; run inference on a
-  PyTorch replica with standard `register_forward_hook`. Full hook ecosystem available
-  (TransformerLens, nnsight). Adds conversion overhead; adds PyTorch as Phase 2 dependency.
-- **NNsight:** Clean API, active development, PyTorch-native. Requires bridge as above.
-
-**Recommended resolution path:** Opus advisory (write the next advisory section in review_notes.md, after §15) before Sonnet codes.
+**Decided by:** Sonnet Phase 2 advisory (review_notes.md §16.2), confirmed by working implementation.
 
 ---
 
@@ -119,24 +104,14 @@ Phase 2 scope. Prevents undisciplined first-Python without adding phase overhead
 
 ---
 
-## Q9 — Activation cache format [OPEN — blocks Phase 2]
+## Q9 — Activation cache format [RESOLVED — 2026-04-21]
 
 **Question:** What is the on-disk and in-memory format for activation caches produced by Phase 2 tracing?
 
-**Why it matters:** Every forward-pass trace generates a cache of intermediate activations.
-Phase 3 visualization and Phase 4 interventions both consume this cache. An arbitrary format
-chosen during Phase 2 implementation propagates to every downstream phase — migrating all
-saved traces later is expensive.
+**Resolution:**
+- **In-memory:** `ActivationCache` — thin wrapper around nested dict; supports `cache["blocks.0.attn.scores"]` dot-key access; `flat()` returns `dict[str, mx.array]` for serialization.
+- **On-disk:** `activations.safetensors` (flat tensors via `mx.save_safetensors`) + `trace_meta.json` (checkpoint, task, input tokens, shapes, timestamp, git hash).
+- **Dtype:** `float32` throughout (MLX default for this model size).
+- **Naming:** TransformerLens-style flat dotted keys: `blocks.{i}.attn.{q|k|v|scores|pattern|output}`, `blocks.{i}.mlp.{pre|post|output}`, `blocks.{i}.resid_{pre|mid|post}`, `embed.{tok|pos|combined}`, `ln_f.input`, `logits`.
 
-**Blocks:** Phase 2 (tracing infrastructure design). Resolve alongside Q5.
-
-**Scope of the decision:**
-- In-memory: what Python structure? (`dict[str, mx.array]`? nested by layer/component?)
-- On-disk: how are caches saved? (`.npz`? `.safetensors` per-trace? plain `.npy` per tensor?)
-- Metadata: where does metadata live? (which checkpoint, which task, which input, which step?)
-- Dtype: `float32` everywhere, or preserve `bfloat16` where MLX uses it?
-- Naming convention: how are layers and components named in the cache keys?
-  (e.g., `layer.0.attn.scores` vs `blocks[0].attn_scores`)
-
-**Recommended resolution path:** Resolve with Q5 (tracing framework) — the in-memory
-format depends on whether MLX arrays are used directly or converted to numpy/torch.
+**Decided by:** Sonnet Phase 2 advisory (review_notes.md §16.3), confirmed by working implementation + save/load round-trip test.

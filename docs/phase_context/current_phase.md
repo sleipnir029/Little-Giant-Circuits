@@ -1,50 +1,65 @@
 # Current Phase
 
 ## Active Phase
-Phase 1 — Tiny Transformer Training (Finalization / Verification Closure)
+Phase 2 — Tracing Foundation
 
 **Status:** COMPLETE
 **Started:** 2026-04-21
 **Completed:** 2026-04-21
-**Note:** §12 independent verification waived by user. See `review_notes.md §15` for rationale and accepted evidence.
+**Note:** Phase 1 closed with §12 waiver (see `review_notes.md §15`). Phase 2 activated here.
 
 ---
 
-## What Was Completed
+## Phase 2 Objective
 
-All 6 tasks trained. All 8 exit criteria from `review_notes.md §10.7` satisfied.
-§12 waived — user confirmed Phase 1 closure on 2026-04-21.
-
-No phase is currently active. Next: Phase 2 planning session.
-
----
-
-## Phase 1 Exit Criteria (all satisfied)
-
-From `review_notes.md §10.7`:
-
-- [x] `python train.py --task induction` runs end-to-end without error
-- [x] Induction model reaches >90% accuracy within 2000 steps (achieved 100%)
-- [x] At least two tasks trained and documented (all 6 trained)
-- [x] Checkpoint loading verified: load → re-evaluate → same accuracy
-- [x] `transformer.py` readable: a human can explain the forward pass in under 5 minutes
-- [x] All six task modules exist (generators + evaluators)
-- [x] `implementation_status.md` reflects what was actually built
-- [x] `open_questions.md` Q1, Q3, Q8 marked RESOLVED
+Build a clean activation capture system for the tiny MLX transformer. A single forward
+pass on any prompt should produce a fully-inspectable `ActivationCache` containing every
+intermediate tensor, saveable to disk, loadable by Phase 3 visualization without redesign.
 
 ---
 
-## What Remains Before Phase 2 Can Begin
+## Phase 2 Exit Criteria (all satisfied)
 
-1. **User confirms Phase 1 closure** — acknowledge §12 waiver; this closes Phase 1
-2. **Commit Phase 1 source files** — 5 modified source files are uncommitted; add `checkpoints/` and `runs/` to `.gitignore` (recommended for a source repo)
+- [x] `transformer.py` — `return_cache=True` works; `model(x)` still returns logits only
+- [x] `src/tracing/` module exists: `cache.py`, `tracer.py`, `export.py`, `__init__.py`
+- [x] `trace(model, tokens)` returns a non-empty `ActivationCache` with correct keys (29 keys)
+- [x] Anti-drift test passes: max diff < 1e-5 (PASSED)
+- [x] `save_trace` + `load_trace` round-trip: PASSED
+- [x] `scripts/trace_prompt.py` runs end-to-end on induction checkpoint without error
+- [x] Induction pattern check: positions 8-14 predict correct tokens at 99%+; Layer 0 heads show previous-token pattern
+- [x] `docs/phases/phase_2.md` written and accurate
 
-Once both are done: update this file to Phase 2, create `docs/phases/phase_2.md`, resolve Q5 and Q9.
+---
+
+## Phase 2 In-Scope
+
+- `src/models/transformer.py` minimal modification (add `return_cache` flag)
+- `src/tracing/` new module
+- `scripts/trace_prompt.py` runnable demo
+- Documentation: `phase_2.md`, context file updates
+
+---
+
+## Phase 2 Out-of-Scope
+
+- Streamlit UI (Phase 3)
+- Ablation / activation patching (Phase 4)
+- PyTorch bridge (not needed for Phase 2)
+- Sparse autoencoders (Phase 6)
+- Pretrained model work (Phase 8)
+
+---
+
+## Predecessor State
+
+Phase 1 COMPLETE (§12 waived, 2026-04-21). All 6 tasks trained. Checkpoint format:
+`checkpoints/{task}/{step:07d}/` with `weights.safetensors`, `config.json`,
+`metrics.json`, `meta.json`.
 
 ---
 
 ## How to Use This File
 
-- Update Status when this phase transitions: `FINALIZING` → then rewrite for Phase 2.
-- Do not use this file as a scratch pad. It is a pointer, not a log.
-- Progress goes in `implementation_status.md`. Unresolved decisions go in `open_questions.md`.
+- Update Status when phase transitions: `IN PROGRESS` → `COMPLETE`.
+- Do not use this file as a scratch pad. Progress goes in `implementation_status.md`.
+- Unresolved decisions go in `open_questions.md`.

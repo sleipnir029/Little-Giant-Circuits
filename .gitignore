@@ -194,6 +194,7 @@ cython_debug/
 # Training artifacts (generated; not source)
 checkpoints/
 runs/
+traces/
 
 # PyPI configuration file
 .pypirc
