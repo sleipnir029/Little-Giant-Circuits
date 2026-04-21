@@ -58,22 +58,27 @@ SAMPLE_DATA = [
 
 def generate(
     n_samples: int,
-    p: int = MODULUS,
-    vocab_size: int = 32,
+    seq_len: int | None = None,  # accepted for interface compatibility; task has fixed seq_len=2
+    vocab_size: int = 16,
     seed: int = 42,
+    p: int = MODULUS,
 ) -> tuple[np.ndarray, np.ndarray]:
     """
     Generate modular arithmetic examples.
 
     Tokens a and b are drawn uniformly from 0..p-1.
     All token values are offset by 1 (so token 1 = integer 0, token p = integer p-1).
-    Vocab must satisfy vocab_size >= p + 1.
+    Vocab must satisfy vocab_size >= p + 1 (for p=13, use vocab_size >= 14).
+
+    seq_len is accepted for interface consistency with train.py but is ignored;
+    this task always produces sequences of length 2.
 
     Args:
         n_samples:  number of examples
-        p:          prime modulus (default 13)
-        vocab_size: total vocabulary size (unused except for assertion)
+        seq_len:    unused; accepted for train.py compatibility
+        vocab_size: total vocabulary size (must satisfy vocab_size >= p+1)
         seed:       random seed
+        p:          prime modulus (default 13)
 
     Returns:
         inputs:  (n_samples, 2) — [a_token, b_token]
@@ -97,6 +102,7 @@ def evaluate(
     model,
     inputs: np.ndarray,
     targets: np.ndarray,
+    seq_len: int | None = None,  # unused; accepted for train.py compatibility
     p: int = MODULUS,
     batch_size: int = 64,
 ) -> dict:

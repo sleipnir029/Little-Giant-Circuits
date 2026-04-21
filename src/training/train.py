@@ -23,7 +23,14 @@ from datetime import timezone
 # Ensure repo root is on path when run as a script
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from src.datasets import factual_lookup, induction
+from src.datasets import (
+    bracket_match,
+    factual_lookup,
+    induction,
+    kv_retrieval,
+    modular_arith,
+    sorting,
+)
 from src.models.transformer import Transformer
 from src.training.loop import compute_accuracy, get_batch, make_train_step
 from src.utils.checkpoint import save as save_checkpoint
@@ -32,6 +39,26 @@ from src.utils.config import ModelConfig, TrainConfig
 TASK_MODULES = {
     "induction": induction,
     "factual_lookup": factual_lookup,
+    "kv_retrieval": kv_retrieval,
+    "modular_arith": modular_arith,
+    "bracket_match": bracket_match,
+    "sorting": sorting,
+}
+
+# Per-task default seq_len and vocab_size.
+# These are overridden by explicit --seq_len / --vocab_size flags.
+# Constraints:
+#   kv_retrieval: seq_len must be even (= 2*n_pairs + 2); 8 → n_pairs=3
+#   modular_arith: seq_len ignored by generator (always 2); vocab_size >= p+1 = 14
+#   bracket_match: seq_len must be even
+#   sorting:       seq_len must be odd (= 2*half + 1)
+TASK_DEFAULTS: dict[str, dict] = {
+    "induction":       {"seq_len": 16, "vocab_size": 32},
+    "factual_lookup":  {"seq_len": 2,  "vocab_size": 32},
+    "kv_retrieval":    {"seq_len": 8,  "vocab_size": 32},
+    "modular_arith":   {"seq_len": 2,  "vocab_size": 16},
+    "bracket_match":   {"seq_len": 16, "vocab_size": 4},
+    "sorting":         {"seq_len": 9,  "vocab_size": 32},
 }
 
 
@@ -41,8 +68,9 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--d_model", type=int, default=64)
     p.add_argument("--n_layers", type=int, default=2)
     p.add_argument("--n_heads", type=int, default=4)
-    p.add_argument("--seq_len", type=int, default=16)
-    p.add_argument("--vocab_size", type=int, default=32)
+    # seq_len and vocab_size default to None here; main() fills from TASK_DEFAULTS
+    p.add_argument("--seq_len", type=int, default=None)
+    p.add_argument("--vocab_size", type=int, default=None)
     p.add_argument("--lr", type=float, default=1e-3)
     p.add_argument("--steps", type=int, default=2000)
     p.add_argument("--batch_size", type=int, default=32)
@@ -55,6 +83,13 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+
+    # Apply per-task defaults when seq_len / vocab_size were not explicitly set
+    defaults = TASK_DEFAULTS[args.task]
+    if args.seq_len is None:
+        args.seq_len = defaults["seq_len"]
+    if args.vocab_size is None:
+        args.vocab_size = defaults["vocab_size"]
 
     model_cfg = ModelConfig(
         vocab_size=args.vocab_size,

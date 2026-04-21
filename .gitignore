@@ -191,6 +191,10 @@ cython_debug/
 # Ruff stuff:
 .ruff_cache/
 
+# Training artifacts (generated; not source)
+checkpoints/
+runs/
+
 # PyPI configuration file
 .pypirc
 

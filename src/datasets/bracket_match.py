@@ -154,6 +154,7 @@ def evaluate(
     model,
     inputs: np.ndarray,
     targets: np.ndarray,
+    seq_len: int | None = None,  # unused; accepted for train.py compatibility
     batch_size: int = 64,
 ) -> dict:
     """
