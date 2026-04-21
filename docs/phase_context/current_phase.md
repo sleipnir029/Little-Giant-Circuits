@@ -1,72 +1,93 @@
 # Current Phase
 
 ## Active Phase
-Phase 3 — Visualization and Inspection UI
+Phase 3 Refinement — Narrative Learning Dashboard
 
-**Status:** COMPLETE
+**Status:** IN PROGRESS
 **Started:** 2026-04-21
-**Completed:** 2026-04-21
-**Note:** Phase 2 closed complete (2026-04-21). All 29 trace tensors verified.
-          Phase 3 activated here.
+**Refinement started:** 2026-04-21
+**Note:** Phase 3 technical UI is COMPLETE (2026-04-21) but is insufficient as the
+          primary learning interface. This refinement adds Learn Mode on top without
+          modifying any existing Investigate Mode views or data pipelines.
 
 ---
 
-## Phase 3 Objective
+## Phase 3 Refinement Objective
 
-Build a clean, lightweight Streamlit interface for inspecting activation traces from the
-tiny trained MLX transformer. A learner should be able to load any task's checkpoint,
-run or load a trace, and see exactly what the model computed — attention patterns,
-residual stream norms, MLP activations, and logit evolution — without prior setup.
+The existing technical inspection views are well-built but serve as a microscope, not
+a teacher. A learner arriving at the app for the first time has no story, no sequencing,
+and no explanation of what they are looking at.
 
-Understanding is the deliverable. The UI serves interpretability, not production use.
+This refinement adds a **Learn Mode** — a stage-stepped, narrative walkthrough of a
+single forward pass. The learner chooses a task and trace, then advances stage by stage
+through the computation, with plain-language explanations at each step.
+
+The existing six views become **Investigate Mode** — accessible via a top-level mode
+toggle, preserved and unchanged.
+
+Understanding is still the deliverable. The refinement makes it achievable without
+prior transformer knowledge.
 
 ---
 
-## Phase 3 Exit Criteria
+## Phase 3 Refinement Exit Criteria
 
-- [ ] `streamlit run app/streamlit_app.py` starts without errors
-- [ ] Six views render cleanly: Token Overview, Layer Overview, Attention,
+### From original Phase 3 (all still hold):
+- [x] `streamlit run app/streamlit_app.py` starts without errors
+- [x] Six Investigate Mode views render: Token Overview, Layer Overview, Attention,
       MLP Activations, Logit Evolution, Compare Traces
-- [ ] Induction demo trace loads and all views display correctly
-- [ ] "Run demo prompt" path generates a fresh trace and views update
-- [ ] Comparison mode renders two traces side-by-side
-- [ ] `scripts/generate_demo_traces.py` generates traces for all 6 tasks
-- [ ] `streamlit` and `plotly` added to `requirements.txt`
-- [ ] `src/viz/` contains no streamlit imports (pure plotly helpers only)
-- [ ] `docs/phases/phase_3.md` written and accurate
-- [ ] Q6 marked RESOLVED in `open_questions.md`
+- [x] Induction demo trace loads and all views display correctly
+- [x] Demo trace generation script works for all 6 tasks
+- [x] `src/viz/` has no streamlit imports
+
+### New refinement criteria:
+- [ ] Top-level Learn / Investigate mode toggle visible on app load
+- [ ] Learn Mode walks through 9 stages for a 2-layer model
+- [ ] Each stage shows: explanation, what changed, what to notice, technical link
+- [ ] Each stage shows a focused Plotly figure (not raw tensor dumps)
+- [ ] Forward/backward step controls work via session_state
+- [ ] Stage indicator ("Step 3 of 9: Layer 0 — Attention") always visible
+- [ ] Prediction confidence shown simply at final stage
+- [ ] Each stage links to the corresponding Investigate Mode view by name
+- [ ] `src/viz/stages.py` has no streamlit imports (pure data layer)
+- [ ] `src/viz/playback.py` has no streamlit imports (pure state helpers)
+- [ ] `app/learn/learn_mode.py` contains all Learn Mode rendering
+- [ ] `docs/phases/phase_3.md` updated with refinement section
+- [ ] `review_notes.md §18` written (advisory for this refinement)
 
 ---
 
-## Phase 3 In-Scope
+## Phase 3 Refinement In-Scope
 
-- `src/viz/loading.py` — pure helpers: list checkpoints/traces, load model, run trace
-- `src/viz/plotting.py` — pure plotly figure functions (no streamlit imports)
-- `app/streamlit_app.py` — main Streamlit entry point with sidebar navigation
-- `app/views/` — one view file per visualization (streamlit wiring only)
-- `scripts/generate_demo_traces.py` — batch trace generation for all 6 tasks
-- `docs/phases/phase_3.md` — phase writeup
-- Context file updates: `implementation_status.md`, `next_actions.md`, `open_questions.md`
+- `src/viz/stages.py` — Stage dataclass + build_stages(cache, model, cfg, meta)
+- `src/viz/playback.py` — pure playback state helpers (no streamlit)
+- `app/learn/__init__.py` — package stub
+- `app/learn/learn_mode.py` — Learn Mode render function
+- `app/streamlit_app.py` — add mode toggle + Learn Mode routing (minimal changes)
+- `docs/phase_context/` — review_notes §18, current_phase, implementation_status, next_actions
 
 ---
 
-## Phase 3 Out-of-Scope
+## Phase 3 Refinement Out-of-Scope
 
-- Ablation controls or patching UI (Phase 4)
-- Checkpoint comparison across training steps (Phase 5)
+- Ablation or patching controls (Phase 4) — explicitly blocked in Learn Mode
+- Checkpoint comparison (Phase 5)
 - SAE feature browser (Phase 6)
-- Interactive weight editing (Phase 7)
-- PyTorch bridge (not needed for Phase 3)
-- Pretrained model work (Phase 8)
-- New training code or dataset changes
+- React or Gradio migration — not justified; Streamlit retained
+- Animation-quality auto-play — deferred; step-buttons are better pedagogy
+- Changes to `src/viz/plotting.py`, `src/viz/loading.py`, `src/tracing/`, `app/views/`
 
 ---
 
 ## Predecessor State
 
-Phase 2 COMPLETE (2026-04-21). All 6 task checkpoints exist under `checkpoints/`.
-One saved demo trace: `traces/induction/demo/`. ActivationCache with 29 tensors, dot-key
-access, safetensors on-disk format. `scripts/trace_prompt.py` runs end-to-end.
+Phase 3 COMPLETE (2026-04-21):
+- `src/viz/loading.py`, `src/viz/plotting.py` — pure plotly helpers
+- `app/streamlit_app.py` with sidebar + 6 views
+- `app/views/` — 6 view files (token_overview, layer_overview, attention_view,
+  mlp_view, logit_evolution, comparison)
+- `scripts/generate_demo_traces.py`
+- Demo traces for all 6 tasks in `traces/{task}/demo/`
 
 ---
 

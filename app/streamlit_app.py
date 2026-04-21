@@ -3,24 +3,21 @@ Little Giant Circuits — Interpretability Microscope
 
 Main Streamlit entry point.
 
+Two modes:
+  - Learn Mode:       guided, stage-stepped narrative walkthrough of the forward pass
+  - Investigate Mode: technical inspection views (6 views, preserved from Phase 3)
+
 Run:
     streamlit run app/streamlit_app.py
 
-The app loads activation traces from trained tiny transformers and
-provides six views for inspecting the forward pass:
-
-  1. Token Overview    — input tokens, predictions, confidence
-  2. Layer Overview    — residual stream norms across layers
-  3. Attention         — attention pattern heatmap browser
-  4. MLP Activations   — neuron activation explorer
-  5. Logit Evolution   — logit lens across layers
-  6. Compare Traces    — side-by-side two traces
-
 Architecture:
-  - src/viz/loading.py   — pure helpers (no streamlit)
-  - src/viz/plotting.py  — pure plotly figure functions
-  - app/views/           — one view module per visualization
-  - app/streamlit_app.py — this file: sidebar + routing
+  - src/viz/loading.py     — pure helpers (no streamlit)
+  - src/viz/plotting.py    — pure plotly figure functions
+  - src/viz/stages.py      — Stage dataclass + build_stages (no streamlit)
+  - src/viz/playback.py    — playback state helpers (no streamlit)
+  - app/learn/learn_mode.py — Learn Mode rendering
+  - app/views/             — Investigate Mode: one view module per visualization
+  - app/streamlit_app.py   — this file: mode toggle + sidebar + routing
 """
 
 import sys
@@ -51,6 +48,7 @@ import app.views.attention_view as v_attn
 import app.views.mlp_view as v_mlp
 import app.views.logit_evolution as v_logit
 import app.views.comparison as v_cmp
+import app.learn.learn_mode as v_learn
 
 
 # ---------------------------------------------------------------------------
@@ -81,7 +79,22 @@ st.set_page_config(
 )
 
 st.title("🔬 Little Giant Circuits")
-st.caption("Interpretability microscope for tiny trained transformers · Phase 3")
+st.caption("Interpretability lab for tiny trained transformers · Phase 3 Refinement")
+
+# ---------------------------------------------------------------------------
+# Top-level mode toggle — Learn Mode vs Investigate Mode
+# ---------------------------------------------------------------------------
+
+mode = st.radio(
+    "Mode",
+    ["Learn Mode", "Investigate Mode"],
+    horizontal=True,
+    help=(
+        "**Learn Mode**: guided walkthrough — step through the forward pass with plain-language explanations.  "
+        "**Investigate Mode**: technical inspection views — raw tensors, full controls."
+    ),
+)
+st.divider()
 
 
 # ---------------------------------------------------------------------------
@@ -209,20 +222,27 @@ with st.sidebar:
             st.info("Click **Run trace** to generate a trace.")
             st.stop()
 
-    # --- View selection ---
-    st.divider()
-    st.subheader("View")
-    view = st.selectbox(
-        "Select view",
-        [
-            "Token Overview",
-            "Layer Overview",
-            "Attention",
-            "MLP Activations",
-            "Logit Evolution",
-            "Compare Traces",
-        ],
-    )
+    # --- View selection (Investigate Mode only) ---
+    view = None
+    if mode == "Investigate Mode":
+        st.divider()
+        st.subheader("View")
+        view = st.selectbox(
+            "Select view",
+            [
+                "Token Overview",
+                "Layer Overview",
+                "Attention",
+                "MLP Activations",
+                "Logit Evolution",
+                "Compare Traces",
+            ],
+        )
+    else:
+        st.divider()
+        st.caption(
+            "Learn Mode: step through the forward pass using the controls on the main panel."
+        )
 
     st.divider()
     st.caption(
@@ -244,7 +264,10 @@ if cache is None or meta is None:
 # View routing
 # ---------------------------------------------------------------------------
 
-if view == "Token Overview":
+if mode == "Learn Mode":
+    v_learn.render(cache, meta, model, cfg)
+
+elif view == "Token Overview":
     v_token.render(cache, meta, model, cfg)
 
 elif view == "Layer Overview":

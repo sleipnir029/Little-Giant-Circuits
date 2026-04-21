@@ -194,3 +194,110 @@ The attention view exposes the induction circuit directly: Layer 0 Heads 1-3 sho
 offset diagonal in the attention pattern, consistent with the positional shortcut
 observed in Phase 2 tracing. Phase 4 activation patching will test whether this is
 truly causal or just correlated.
+
+---
+
+# Phase 3 Refinement — Narrative Learning Dashboard
+
+**Status:** IN PROGRESS
+**Started:** 2026-04-21
+
+## Motivation
+
+The Phase 3 technical UI is well-built for inspection but insufficient as the primary
+learning interface. A learner arriving at the app has no story, no sequencing, and
+no explanation layer. All six views are presented as equals with no "start here."
+
+This refinement adds a **Learn Mode** — a stage-stepped narrative walkthrough of a
+single forward pass — without modifying any existing Investigate Mode views.
+
+## What Was Added
+
+### New modules (all streamlit-free except learn_mode.py)
+
+- `src/viz/stages.py` — `Stage` dataclass + `build_stages(cache, model, cfg, meta)`
+  - 9 stages for a 2-layer model (general: 3 stages per layer + 2 bookend stages)
+  - Each stage: name, explanation, what_changed, what_to_notice, next_technical_view, figure
+  - Figures built from existing `src/viz/plotting.py` functions (no new plot code)
+
+- `src/viz/playback.py` — pure playback state helpers
+  - `get/set_stage_index`, `step_forward/backward`, `goto_stage`, `is_first/last`
+  - Works on any `dict`-like session state (Streamlit-agnostic)
+
+- `app/learn/__init__.py` — package stub
+
+- `app/learn/learn_mode.py` — Learn Mode render function
+  - Builds stages once per trace (cached in session_state)
+  - Playback controls: ← Previous | progress bar | Next → (top + bottom)
+  - Quick-jump selectbox for any stage
+  - Two-column layout: explanation panel (left) + Plotly figure (right)
+  - Cross-link to corresponding Investigate Mode view at each stage
+
+### Modified
+
+- `app/streamlit_app.py`
+  - Top-level mode toggle: **Learn Mode** | **Investigate Mode**
+  - Mode toggle is above the sidebar content (always visible)
+  - View selector only appears in Investigate Mode
+  - Sidebar shows mode-specific hint text
+
+## The 9 Stages (for induction task, 2-layer model)
+
+| # | Stage | Figure shown | Links to |
+|---|-------|--------------|----------|
+| 1 | Input Tokens | Token sequence bar | Token Overview |
+| 2 | Embeddings | Token + pos + combined L2 norms | Layer Overview |
+| 3 | Layer 0 — Attention | All-heads pattern grid (subplots) | Attention |
+| 4 | Layer 0 — MLP | Post-GELU activation heatmap | MLP Activations |
+| 5 | After Layer 0 — Residual Stream | Full residual norms line chart | Layer Overview |
+| 6 | Layer 1 — Attention | All-heads pattern grid | Attention |
+| 7 | Layer 1 — MLP | Post-GELU activation heatmap | MLP Activations |
+| 8 | After Layer 1 — Residual Stream | Full residual norms line chart | Layer Overview |
+| 9 | Final Prediction | Logit lens heatmap + actual next targets | Logit Evolution |
+
+## Design Decisions
+
+### React not adopted
+Streamlit is retained. The "playback" experience is step-forward/step-back buttons —
+better pedagogy than auto-play. Streamlit handles this cleanly with `st.session_state`.
+React migration would discard all existing working views and add a build system.
+
+### Stages are framework-agnostic
+`src/viz/stages.py` has no Streamlit imports. `Stage` objects carry Plotly figures
+and text. A future React frontend could consume the same stage data.
+
+### No ablation controls in Learn Mode
+Learn Mode is purely descriptive: it describes what the model DID on a fixed trace.
+No ablation, patching, or "what-if" controls exist in Learn Mode. These are Phase 4.
+
+### Stage list is dynamic
+`build_stages()` generates stages for any `n_layers` value, not hardcoded for 2 layers.
+A 3-layer model produces 11 stages (3×3 + 2 bookends).
+
+## What Remains Unchanged
+
+All Phase 3 (original) deliverables are preserved:
+- `src/viz/loading.py`, `src/viz/plotting.py` — not modified
+- `app/views/` — all 6 view files unchanged
+- Demo traces in `traces/{task}/demo/`
+- `scripts/generate_demo_traces.py`
+
+## Validation
+
+- `streamlit run app/streamlit_app.py` starts cleanly (health check: ok)
+- `build_stages()` returns 9 stages for 2-layer induction trace, all with figures
+- `playback.py` state machine tested: forward/backward/clamp all correct
+- All view module imports succeed
+- Learn Mode and Investigate Mode are independently accessible
+
+## What Remains Unfinished
+
+- Visual inspection of Learn Mode in a browser (user must verify)
+  - Check that ← / → buttons step correctly
+  - Check explanation panels render readable text
+  - Check figures are focused and legible at each stage
+- Stage explanations for non-induction tasks could be further tuned
+  (currently have task-specific hints for induction and kv_retrieval;
+  others use generic language)
+- Bottom navigation buttons use `st.rerun()` — verify this doesn't cause
+  flicker on slower hardware

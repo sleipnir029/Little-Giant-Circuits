@@ -5,6 +5,56 @@ Each entry: date, what was built, which plan section it satisfies, what remains.
 
 ---
 
+## 2026-04-21 — Phase 3 Refinement — Narrative Learning Dashboard (Sonnet)
+
+**What was built:**
+
+New modules (streamlit-free):
+- `src/viz/stages.py` — `Stage` dataclass + `build_stages(cache, model, cfg, meta)`.
+  Produces 9 stages for a 2-layer model (dynamic: 2 + 3×n_layers). Each stage carries:
+  name, explanation (what this stage is), what_changed, what_to_notice,
+  next_technical_view (Investigate Mode link), and a Plotly figure.
+  Figures reuse existing `src/viz/plotting.py` functions without modification.
+- `src/viz/playback.py` — pure playback state helpers: get/set stage index,
+  step_forward/backward, goto_stage, is_first/is_last, stage_label.
+  Works on any dict-like session_state; no Streamlit dependency.
+
+Learn Mode UI:
+- `app/learn/__init__.py` — package stub
+- `app/learn/learn_mode.py` — full Learn Mode render: stage building (cached per trace),
+  playback controls (← prev | progress bar + stage label | next →), quick-jump selectbox,
+  two-column layout (explanation left, figure right), bottom navigation with `st.rerun()`.
+
+Updated entry point:
+- `app/streamlit_app.py` — top-level mode toggle (Learn Mode / Investigate Mode) added
+  above sidebar; view selector only appears in Investigate Mode; Learn Mode routes to
+  `app/learn/learn_mode.render()`; all original Investigate Mode routing preserved unchanged.
+
+**Validation:**
+- `streamlit run app/streamlit_app.py` starts cleanly (health check `ok`)
+- `build_stages(cache, model, cfg, meta)` for induction task: 9 stages, all with figures ✓
+- `playback.py` state machine: forward/backward/clamp verified with unit test ✓
+- All view module imports succeed ✓
+- `src/viz/stages.py` and `src/viz/playback.py` have zero streamlit imports ✓
+- All 6 original Investigate Mode views unchanged ✓
+
+**Satisfies:** Phase 3 Refinement objective — learner-first narrative dashboard on top of
+the existing technical inspection layer.
+
+**Decisions:**
+- React not adopted — Streamlit retained with architecture split instead
+- Stages are dynamic (works for any n_layers, not hardcoded for 2)
+- Learn Mode is purely descriptive — no ablation/patching controls (Phase 4 boundary enforced)
+- Bottom navigation buttons use `st.rerun()` to propagate state after late-page rendering
+- Stage figures reuse existing `plotting.py` without adding new plot functions
+
+**What remains unfinished:**
+- Visual browser inspection (user must verify Learn Mode renders correctly)
+- Stage explanations for non-induction tasks could be tuned further
+- Bottom button flicker on slower hardware not yet tested
+
+---
+
 ## 2026-04-21 — Phase 3 Complete — Visualization and Inspection UI (Sonnet)
 
 **What was built:**

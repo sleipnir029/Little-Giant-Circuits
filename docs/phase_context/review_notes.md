@@ -928,3 +928,150 @@ Note: visual correctness is not machine-verifiable here. The user should inspect
 - `CLAUDE.md` — proposal required for any rule changes
 - Existing checkpoint or trace files
 - `src/training/` — Phase 3 does not touch training code
+
+---
+
+## 18. Phase 3 Refinement Advisory — Narrative Learning Dashboard
+
+**Reviewer role:** Sonnet implementer — design advisory before refinement pass.
+**Date:** 2026-04-21
+**Subject:** Phase 3 Refinement — why the current UI is insufficient and what must change.
+
+---
+
+### 18.1 Why the current Phase 3 UI is insufficient
+
+The existing Phase 3 app is a technical inspection tool. It is well-built for that
+purpose: modular views, clean Plotly figures, zero streamlit imports in `src/viz/`.
+
+But the project's stated goal is **understanding**, not tensor display. The current
+app presents six views with raw tensor visualizations and a sidebar full of controls.
+A learner arriving at the app faces:
+
+- No narrative — there is no story connecting the views
+- No sequencing — all six views are presented as equals with no "start here"
+- No explanation layer — "attention pattern" is labeled but not explained in context
+- No "what to notice" guidance — the learner must know what to look for before they look
+- No playback — the forward pass is a sequence of computations; the app shows only static snapshots
+
+The result: a learner who does not already understand transformers gains little from
+the app. The views reinforce existing knowledge rather than build new knowledge.
+This violates Principle A (Learning first) from PROJECT_PLAN.md §2.
+
+---
+
+### 18.2 What the refined Phase 3 must accomplish
+
+The primary goal is a **stage-stepped narrative** of a single forward pass:
+- The learner picks a task and a prompt
+- The app walks through the forward pass one stage at a time (embed → L0 attn → L0 MLP → ... → prediction)
+- Each stage shows a focused visualization plus plain-language explanation
+- Each stage tells the learner: what happened, what changed, what to notice
+- Each stage links to the corresponding Investigate Mode view for technical depth
+
+Secondary goal: the existing technical views are preserved and improved with
+minimal additions (labels, brief explanations), accessible via an "Investigate Mode"
+toggle.
+
+---
+
+### 18.3 Main UX and architecture risks
+
+**R1 — Auto-play temptation leads to Phase 4 drift.**
+Any "what if you zeroed this head" or "try ablation here" interaction is Phase 4 scope.
+Learn Mode must remain purely descriptive — it describes what the model DID on a fixed
+trace, not what it would do under intervention. Enforce this at the UI level: no
+ablation, patching, or modification controls in Learn Mode.
+
+**R2 — Stage explosion for longer traces.**
+For induction (T=15) with 2 layers, there are ~9 meaningful stages. For custom tokens
+with T=32, per-position views risk creating 32-column displays. Stages must describe
+the forward pass structure (embed / attention / MLP / residual) not individual token
+positions. Token-level analysis stays in Investigate Mode.
+
+**R3 — Streamlit's reactive model vs. "playback".**
+Streamlit reruns the full script on every widget interaction. True auto-advance with
+controlled timing requires `st.components.v1.html` embedded JS. For MVP, discrete
+forward/backward step buttons are sufficient and better pedagogy (learner-paced).
+Defer animation-quality playback unless a concrete wall is hit and documented.
+
+**R4 — Mode switch UI friction.**
+A top-level mode toggle (Learn / Investigate) must be clearly visible and easy to switch.
+The sidebar gets crowded. Use `st.tabs` or a top-of-page `st.radio` (not in sidebar) for
+the mode switch, with the sidebar showing different content in each mode.
+
+---
+
+### 18.4 Whether React is the right choice
+
+**No.** Streamlit is retained for Phase 3 Refinement.
+
+Reasons:
+- The existing 6 views, all Plotly figures, the trace loading pipeline, and the
+  `src/viz/` layer all work without change. A React migration throws away working code.
+- The "playback" experience the task describes is step-forward/step-back buttons, which
+  Streamlit handles cleanly with `st.session_state`.
+- Smooth auto-play animation at sub-second timing is the one genuine Streamlit weakness.
+  If that becomes a concrete requirement, add a `st.components.v1.html` widget for that
+  one component — not a full migration.
+- React migration = new build system, JSON serialization of figures, new deployment —
+  none of which serves interpretability or learning.
+
+If a future phase (Phase 5/6) creates genuinely large interactive datasets that stress
+Streamlit's reactive model, revisit. Document the wall when it is hit.
+
+---
+
+### 18.5 What should remain from the current technical UI
+
+All six Investigate Mode views are preserved unchanged:
+- Token Overview, Layer Overview, Attention, MLP Activations, Logit Evolution, Compare Traces
+- `src/viz/plotting.py` — no changes
+- `src/viz/loading.py` — no changes (extend only if needed)
+- `app/views/` — all 6 files unchanged
+
+These become the "Investigate Mode" behind the mode toggle. They are the technical
+depth layer that Learn Mode links to.
+
+---
+
+### 18.6 What should explicitly NOT be built yet
+
+- Ablation, patching, or "what-if" controls in Learn Mode (Phase 4)
+- Animation-quality smooth playback via embedded JS (deferred; step-buttons are better pedagogy)
+- Per-token narrative (too granular; stage-level narrative is correct)
+- Checkpoint comparison in Learn Mode (Phase 5)
+- SAE feature explanations (Phase 6)
+- React or Gradio migration (not justified by current constraints)
+- A "curriculum" or "lesson plan" UI layer (over-engineered for Phase 3 Refinement)
+
+---
+
+### 18.7 Architecture for the refinement
+
+Three new modules, additive only:
+
+```
+src/viz/stages.py    — Stage dataclass + build_stages(cache, model, cfg, meta)
+src/viz/playback.py  — pure playback state helpers (no streamlit imports)
+app/learn/           — Learn Mode view components (streamlit only)
+  __init__.py
+  learn_mode.py
+```
+
+Updated entry point: `app/streamlit_app.py` gains a top-level mode toggle
+that routes to either Learn Mode or the existing Investigate Mode views.
+
+Stage ordering for a 2-layer model (9 stages):
+0. Input Tokens
+1. Embeddings
+2. Layer 0 — Attention
+3. Layer 0 — MLP
+4. Layer 0 — Residual Stream
+5. Layer 1 — Attention
+6. Layer 1 — MLP
+7. Layer 1 — Residual Stream
+8. Final Prediction
+
+Each Stage carries: name, explanation, what_changed, what_to_notice,
+next_technical_view (string pointing to Investigate Mode), and a Plotly figure.

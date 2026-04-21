@@ -7,47 +7,49 @@ This is a short-term queue, not a roadmap — keep it under 10 items.
 
 ## Current Queue
 
-### 1. Visual inspection of Phase 3 app
+### 1. Visual inspection of the refined app (PRIORITY)
 
-Run the app and visually verify key views:
+Run the app and verify BOTH modes:
 
 ```bash
 source .venv/bin/activate
 streamlit run app/streamlit_app.py
 ```
 
-Check:
+**Learn Mode checks:**
+- Mode toggle visible at top (Learn Mode / Investigate Mode)
+- Default loads to Learn Mode, Step 1: Input Tokens
+- "Next →" advances through all 9 stages without error
+- "← Previous" correctly goes back
+- Quick-jump selectbox jumps to any stage
+- Each stage shows: explanation text, what changed, what to notice
+- Each stage shows a Plotly figure (not blank)
+- "Investigate Mode → [view name]" cross-link visible at each stage
+- Step 9 shows the logit lens heatmap with actual next targets highlighted
+
+**Investigate Mode checks (existing, must not regress):**
+- All 6 views render correctly
 - Induction task, Attention view, Layer 0 Heads 1-3: offset diagonal expected
-- Induction task, Logit Evolution: induction positions (second half) should light up early
-- Sorting task, Logit Evolution: output positions should show near-100% confidence
-- Bracket match, Logit Evolution: partial confidence expected (~68% overall accuracy)
+- Induction task, Logit Evolution: induction positions (second half) light up early
 
-### 2. Commit Phase 3 source files
+### 2. Commit Phase 3 Refinement source files
 
-Files added/modified in Phase 3:
-- `src/viz/__init__.py`, `src/viz/loading.py`, `src/viz/plotting.py` — new module
-- `app/streamlit_app.py` — new entry point
-- `app/views/` — all 6 view files
-- `scripts/generate_demo_traces.py` — new utility
-- `docs/phases/phase_3.md` — phase writeup
+Files added/modified in Phase 3 Refinement:
+- `src/viz/stages.py` — new
+- `src/viz/playback.py` — new
+- `app/learn/__init__.py` — new
+- `app/learn/learn_mode.py` — new
+- `app/streamlit_app.py` — updated (mode toggle + Learn Mode routing)
+- `docs/phases/phase_3.md` — refinement section appended
 - `docs/phase_context/` — all context files updated
-- `requirements.txt` — streamlit + plotly added
-
-Add `traces/` to `.gitignore` if not already there (trace artifacts are large).
 
 ### 3. Request Phase 4 planning / implementation prompt
 
-Phase 3 is COMPLETE. When ready: ask for the Phase 4 planning and implementation prompt.
-
-Phase 4 will build on Phase 3's views by adding:
-- Zero ablation (zero out a head/neuron and re-run)
-- Mean ablation (replace with dataset mean activation)
-- Activation patching (patch clean run activation into corrupted run)
-- Before/after comparison UI (reuse `app/views/comparison.py`)
+Phase 3 Refinement is complete when visual inspection passes.
+Phase 4 adds causal interventions: zero/mean ablation, activation patching, before/after UI.
 
 Key question for Phase 4 planning: does MLX support clean intervention without
 re-running the full forward pass, or does each ablation require a separate trace call?
-This determines the architecture of the intervention runner.
 
 ---
 
