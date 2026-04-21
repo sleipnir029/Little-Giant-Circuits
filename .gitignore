@@ -196,6 +196,9 @@ checkpoints/
 runs/
 traces/
 
+# Playwright browser testing artifacts
+.playwright-mcp/
+
 # PyPI configuration file
 .pypirc
 

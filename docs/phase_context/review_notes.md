@@ -800,3 +800,131 @@ Use the induction task — 100% converged, clearest expected circuit:
 6. Check that `blocks.0.attn.pattern` shows the model attending to position 0
    from position 2 (the expected induction head behavior)
 7. Verify save → load round-trip: saved and loaded tensors must match
+
+---
+
+## 17. Phase 3 Advisory Notes (Sonnet, pre-implementation)
+
+**Role:** Sonnet implementer — pre-implementation advisory.
+**Date:** 2026-04-21
+**Subject:** Phase 3 — Visualization and Inspection UI.
+
+---
+
+### 17.1 Phase Objective (in my own words)
+
+Build a lightweight Streamlit microscope that loads a saved activation trace (or runs
+one on-the-fly from a demo prompt) and lets a learner see — not just imagine — how
+information moves through the model. Every view should answer one concrete interpretability
+question, not just display a tensor.
+
+---
+
+### 17.2 Top Risks
+
+**R1 — Information overload on first load (highest UX risk)**
+Showing all 29 cache tensors at once defeats the educational goal. Each view should show
+one question and one answer. Sidebar should default to: induction task, latest checkpoint,
+existing demo trace, Token Overview. A learner should see something useful with zero config.
+
+**R2 — Logit evolution view needs the model, not just the trace**
+To show "what would the model predict if it stopped at layer i?" (logit lens), you must
+apply `ln_f + head` to each `resid_post`. The trace stores `resid_post` but not the
+per-layer logits. Load the model from `meta["checkpoint_dir"]` and compute inline.
+Do not extend the trace format to store per-layer logits — that couples Phase 2 and Phase 3.
+
+**R3 — Streamlit reactivity and model load time**
+MLX model load is fast (<1s for these sizes). Use `@st.cache_resource` keyed on checkpoint
+path to avoid reloading on every widget interaction. Use `@st.cache_data` for disk-loaded
+traces. Run traces (new input) are not cached — they are recomputed on every widget change.
+
+**R4 — No tokenizer exists — integer-only vocabulary**
+Token labels are integers. For `bracket_match`, map 1→`(`, 2→`)` as display hints.
+For `sorting`, label `vocab-1` as `SEP`. Do not invent a tokenizer or text rendering layer.
+
+---
+
+### 17.3 Scope Boundaries
+
+**Build now:**
+- `src/viz/loading.py` — pure helpers: list checkpoints/traces, load model, run trace
+- `src/viz/plotting.py` — pure plotly figure functions (no streamlit imports)
+- `app/streamlit_app.py` — main entry with sidebar navigation
+- `app/views/` — one file per view, streamlit wiring only
+- `scripts/generate_demo_traces.py` — generate demo traces for all 6 tasks
+- `docs/phases/phase_3.md` — phase writeup
+
+**Do not build now:**
+- Ablation controls or patching UI (Phase 4)
+- Checkpoint comparison across training steps (Phase 5)
+- SAE feature browser (Phase 6)
+- PyTorch bridge (not needed)
+- Interactive weight editing (Phase 7)
+
+---
+
+### 17.4 Architecture Decisions
+
+**`src/viz/` is streamlit-free.** Plotly figure functions live in `src/viz/plotting.py`
+and return `go.Figure` objects. Streamlit calls `st.plotly_chart(fig)`. This means
+Phase 4 ablation scripts can import and reuse the same plot functions without streamlit.
+
+**Logit lens computation** is the single most educational piece of code in Phase 3.
+It demonstrates that the residual stream is an additive accumulation of information
+by showing how much of the final answer is already "in" the stream after each layer.
+The computation is: for each layer i, `softmax(head(ln_f(resid_post_i)))`.
+
+**Comparison mode** uses `st.columns(2)` rendering the same view function twice with
+different trace inputs. No diff engine, no cross-trace computation. Phase 5 scope.
+
+---
+
+### 17.5 Per-View Educational Purpose
+
+| View | Question it answers |
+|------|---------------------|
+| Token Overview | What tokens went in? What did the model predict? How confident? |
+| Layer Overview | Where does the residual stream norm change most? Which layer does the most work? |
+| Attention | Which positions did each head attend to? Is there a detectable pattern? |
+| MLP Activations | Which neurons activate most strongly for this token? Before/after GELU? |
+| Logit Evolution | At what layer does the model "know" the answer? How does confidence build? |
+| Comparison | Does a different prompt activate the same heads or different ones? |
+
+---
+
+### 17.6 Q6 Resolution — Streamlit suitability
+
+Q6 is resolved by commitment: **Streamlit is used for Phase 3.**
+
+Rationale: attention heatmaps and logit evolution views are plotly-based, which
+renders smoothly in Streamlit via `st.plotly_chart`. For the tiny model sizes here
+(2 layers, 4 heads, T ≤ 32), there are no performance concerns. If Phase 5/6 traces
+become large (e.g., many checkpoint comparisons), Gradio or Panel can replace the
+presentation layer without changing `src/viz/plotting.py`.
+
+---
+
+### 17.7 Validation Plan
+
+1. `streamlit run app/streamlit_app.py` starts without errors
+2. Induction demo trace loads; all 6 views render without exceptions
+3. "Run demo prompt" generates a fresh trace and views update
+4. `scripts/trace_prompt.py` still works (no regression from Phase 2)
+5. `scripts/generate_demo_traces.py` generates traces for all 6 tasks
+6. `streamlit`, `plotly` added to `requirements.txt`
+
+Note: visual correctness is not machine-verifiable here. The user should inspect:
+- Attention heatmap for induction task: Layer 0 heads should show a diagonal or
+  offset pattern (previous-token or induction head)
+- Logit evolution: confidence should be low in early layers, high by final layer
+  for converged tasks (induction, kv_retrieval, sorting)
+
+---
+
+### 17.8 What Must Not Change in This Phase
+
+- `src/models/transformer.py` — no changes; Phase 2 tracing is stable
+- `src/tracing/` — no changes; trace format is locked
+- `CLAUDE.md` — proposal required for any rule changes
+- Existing checkpoint or trace files
+- `src/training/` — Phase 3 does not touch training code

@@ -5,6 +5,41 @@ Each entry: date, what was built, which plan section it satisfies, what remains.
 
 ---
 
+## 2026-04-21 — Phase 3 Complete — Visualization and Inspection UI (Sonnet)
+
+**What was built:**
+- `src/viz/__init__.py`, `src/viz/loading.py` — pure helpers: list/load checkpoints+traces,
+  load model, run demo/custom traces, residual norms extractor, token label helpers,
+  `compute_logit_lens` (logit lens: project each `resid_post` through `ln_f + head`)
+- `src/viz/plotting.py` — 7 pure plotly figure functions (no streamlit): `attention_heatmap`,
+  `residual_norms_fig`, `mlp_heatmap`, `top_neurons_bar`, `top_k_bar`,
+  `logit_evolution_heatmap`, `logit_evolution_line`
+- `app/streamlit_app.py` — main entry; sidebar: task/checkpoint/trace selection + 3 trace
+  modes (load saved / run demo / run custom); routes to 6 views
+- `app/views/`: `token_overview.py`, `layer_overview.py`, `attention_view.py`,
+  `mlp_view.py`, `logit_evolution.py`, `comparison.py`
+- `scripts/generate_demo_traces.py` — one-shot trace generation for all 6 tasks
+
+**Validation:**
+- Streamlit app starts without errors (`/health` returns `ok`)
+- All 6 demo traces generated: `traces/{task}/demo/`
+- Logit lens: shape (2, T, 32), probs sum to 1.0 ✓
+- All 5 plotly functions return valid `go.Figure` objects ✓
+- Phase 2 `scripts/trace_prompt.py` still works (no regression) ✓
+
+**Satisfies:** `PROJECT_PLAN.md §6 Phase 3` — Streamlit app, modular visual components,
+run browser, experiment comparison mode.
+
+**Decisions:**
+- `src/viz/` has zero streamlit imports — Phase 4/5 can reuse plotly functions directly
+- Logit lens uses trained `ln_f` — standard approach, more interpretable than skipping LN
+- `@st.cache_resource` for models, `@st.cache_data` for disk traces — avoids reload on each widget change
+- Comparison mode: `st.columns(2)` only, no diff engine — Phase 5 scope
+
+**Requirements added:** `streamlit>=1.35.0`, `plotly>=5.22.0` in `requirements.txt`
+
+---
+
 ## 2026-04-21 — Phase 2 Complete — Tracing Foundation (Sonnet)
 
 **What was built:**

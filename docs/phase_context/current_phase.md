@@ -1,60 +1,72 @@
 # Current Phase
 
 ## Active Phase
-Phase 2 — Tracing Foundation
+Phase 3 — Visualization and Inspection UI
 
 **Status:** COMPLETE
 **Started:** 2026-04-21
 **Completed:** 2026-04-21
-**Note:** Phase 1 closed with §12 waiver (see `review_notes.md §15`). Phase 2 activated here.
+**Note:** Phase 2 closed complete (2026-04-21). All 29 trace tensors verified.
+          Phase 3 activated here.
 
 ---
 
-## Phase 2 Objective
+## Phase 3 Objective
 
-Build a clean activation capture system for the tiny MLX transformer. A single forward
-pass on any prompt should produce a fully-inspectable `ActivationCache` containing every
-intermediate tensor, saveable to disk, loadable by Phase 3 visualization without redesign.
+Build a clean, lightweight Streamlit interface for inspecting activation traces from the
+tiny trained MLX transformer. A learner should be able to load any task's checkpoint,
+run or load a trace, and see exactly what the model computed — attention patterns,
+residual stream norms, MLP activations, and logit evolution — without prior setup.
 
----
-
-## Phase 2 Exit Criteria (all satisfied)
-
-- [x] `transformer.py` — `return_cache=True` works; `model(x)` still returns logits only
-- [x] `src/tracing/` module exists: `cache.py`, `tracer.py`, `export.py`, `__init__.py`
-- [x] `trace(model, tokens)` returns a non-empty `ActivationCache` with correct keys (29 keys)
-- [x] Anti-drift test passes: max diff < 1e-5 (PASSED)
-- [x] `save_trace` + `load_trace` round-trip: PASSED
-- [x] `scripts/trace_prompt.py` runs end-to-end on induction checkpoint without error
-- [x] Induction pattern check: positions 8-14 predict correct tokens at 99%+; Layer 0 heads show previous-token pattern
-- [x] `docs/phases/phase_2.md` written and accurate
+Understanding is the deliverable. The UI serves interpretability, not production use.
 
 ---
 
-## Phase 2 In-Scope
+## Phase 3 Exit Criteria
 
-- `src/models/transformer.py` minimal modification (add `return_cache` flag)
-- `src/tracing/` new module
-- `scripts/trace_prompt.py` runnable demo
-- Documentation: `phase_2.md`, context file updates
+- [ ] `streamlit run app/streamlit_app.py` starts without errors
+- [ ] Six views render cleanly: Token Overview, Layer Overview, Attention,
+      MLP Activations, Logit Evolution, Compare Traces
+- [ ] Induction demo trace loads and all views display correctly
+- [ ] "Run demo prompt" path generates a fresh trace and views update
+- [ ] Comparison mode renders two traces side-by-side
+- [ ] `scripts/generate_demo_traces.py` generates traces for all 6 tasks
+- [ ] `streamlit` and `plotly` added to `requirements.txt`
+- [ ] `src/viz/` contains no streamlit imports (pure plotly helpers only)
+- [ ] `docs/phases/phase_3.md` written and accurate
+- [ ] Q6 marked RESOLVED in `open_questions.md`
 
 ---
 
-## Phase 2 Out-of-Scope
+## Phase 3 In-Scope
 
-- Streamlit UI (Phase 3)
-- Ablation / activation patching (Phase 4)
-- PyTorch bridge (not needed for Phase 2)
-- Sparse autoencoders (Phase 6)
+- `src/viz/loading.py` — pure helpers: list checkpoints/traces, load model, run trace
+- `src/viz/plotting.py` — pure plotly figure functions (no streamlit imports)
+- `app/streamlit_app.py` — main Streamlit entry point with sidebar navigation
+- `app/views/` — one view file per visualization (streamlit wiring only)
+- `scripts/generate_demo_traces.py` — batch trace generation for all 6 tasks
+- `docs/phases/phase_3.md` — phase writeup
+- Context file updates: `implementation_status.md`, `next_actions.md`, `open_questions.md`
+
+---
+
+## Phase 3 Out-of-Scope
+
+- Ablation controls or patching UI (Phase 4)
+- Checkpoint comparison across training steps (Phase 5)
+- SAE feature browser (Phase 6)
+- Interactive weight editing (Phase 7)
+- PyTorch bridge (not needed for Phase 3)
 - Pretrained model work (Phase 8)
+- New training code or dataset changes
 
 ---
 
 ## Predecessor State
 
-Phase 1 COMPLETE (§12 waived, 2026-04-21). All 6 tasks trained. Checkpoint format:
-`checkpoints/{task}/{step:07d}/` with `weights.safetensors`, `config.json`,
-`metrics.json`, `meta.json`.
+Phase 2 COMPLETE (2026-04-21). All 6 task checkpoints exist under `checkpoints/`.
+One saved demo trace: `traces/induction/demo/`. ActivationCache with 29 tensors, dot-key
+access, safetensors on-disk format. `scripts/trace_prompt.py` runs end-to-end.
 
 ---
 

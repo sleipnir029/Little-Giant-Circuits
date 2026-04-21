@@ -69,19 +69,20 @@ patching that MLX can't support cleanly, revisit Q2 (CPU-only PyTorch device) th
 
 ---
 
-## Q6 — Streamlit suitability [OPEN — inform Phase 3 design]
+## Q6 — Streamlit suitability [RESOLVED — 2026-04-21]
 
-**Question:** Is Streamlit the right tool for layerwise-logit and attention-map views, or will it become a bottleneck?
+**Question:** Is Streamlit the right tool for layerwise-logit and attention-map views?
 
-**Why it matters:** Principle C says visualization is core. If Streamlit's reactive model makes interactive attention maps laggy or awkward, the visualization phase will fight the tool rather than use it. Worth a quick spike before committing Phase 3 scope to Streamlit-first design.
+**Resolution:** Streamlit is committed for Phase 3. All views are plotly-based
+(`st.plotly_chart`), which renders smoothly in Streamlit. For tiny model sizes
+(2 layers, 4 heads, T ≤ 32), there are no performance concerns.
 
-**Blocks:** Phase 3 design (not start, but design). Early validation recommended.
+Mitigation: `src/viz/plotting.py` has zero streamlit imports. If Phase 5/6 traces
+become large enough to stress Streamlit's reactive model (e.g., many checkpoint
+comparisons), the presentation layer can be swapped to Gradio or Panel without
+touching the analysis functions.
 
-**Options:**
-- Streamlit (current plan)
-- Gradio (similar simplicity, slightly different model)
-- Panel / HoloViews (more power for interactive plots)
-- Jupyter + ipywidgets (stays close to analysis context)
+(Resolved by Phase 3 implementation + successful startup validation)
 
 ---
 
