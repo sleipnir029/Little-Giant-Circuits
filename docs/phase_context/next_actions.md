@@ -7,6 +7,25 @@ This is a short-term queue, not a roadmap — keep it under 10 items.
 
 ## Current Queue
 
+### 0. Phase 3D Step B — Scene export + activation intensity (ACTIVE)
+
+Next implementation step per `docs/proposals/spatial_viewer_plan.md §2 Step B`:
+
+1. Create `src/viz/export_scene.py` — reuses ActivationCache, compute_logit_lens,
+   residual_norms, build_stages; emits `learn_data/{task}/{trace_id}.scene.json`
+   matching schema in `docs/architecture/spatial_visualization.md §F`
+2. Components in slice 1: model, embed, residual_bus, per-layer layer/attn/mlp, unembed
+   (`children` arrays empty — no head, no neuron yet)
+3. Ticks: embed, L0.attn, L0.mlp, L1.attn, L1.mlp, unembed (2 + 2L ticks)
+4. Extend `scripts/export_learn_stages.py` to also produce `.scene.json` per task
+5. Update `learn_data/manifest.json` to include `scene_path` per package
+6. Extend `useLearnData.ts` to fetch both packages when task selected
+7. Bind each component's emissive intensity to final tick's `active_components`
+
+**Exit:** Switching tasks changes which components glow. Color legend in overlay.
+
+**Do not start Step B until Step A is confirmed by Opus review.**
+
 ### 1. Commit Phase 3B source files (PRIORITY)
 
 Files added/modified in Phase 3B:

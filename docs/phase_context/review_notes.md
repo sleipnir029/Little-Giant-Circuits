@@ -1345,3 +1345,245 @@ A learner should not need to figure out what the axes represent; the chart must 
 7. LogitLensViz final stage: top-k bar shows correct prediction (token "7" at high confidence)
 8. factual_lookup: T=1 renders without crash
 9. Browser console: zero uncaught errors across all 6 tasks
+
+---
+
+## 21. Phase 3D Advisory — Spatial Mechanistic Viewer (Opus, corrective)
+
+**Reviewer role:** Opus 4.7 — principal research advisor, product architect, interpretability
+design lead.
+**Review type:** Corrective architecture advisory. Supersedes the Learn Mode product
+definition embedded in §18, §19, and §20.
+**Date:** 2026-04-21.
+**Subject:** Why prior Learn Mode attempts missed the target, what the target actually is,
+and what Sonnet must build next.
+
+The detailed design lives in `docs/architecture/spatial_visualization.md`. The concise
+implementation brief lives in `docs/proposals/spatial_viewer_plan.md`. This section is
+the review-notes record of *why the correction was made*.
+
+---
+
+### 21.1 Why previous Learn Mode attempts missed the target
+
+**What §18–§20 built.** A Streamlit stage-player, then a JSON bridge, then a React
+stage-player. Each iteration improved rendering quality but preserved the same product
+shape: a sequence of labeled 2D charts advanced by Prev/Next buttons. The result is
+functionally a slide deck with playback controls.
+
+**Why the shape is wrong.** A transformer is not a sequence of slides. It is a
+**spatial, layered, parallel structure** where:
+
+- residual streams run through every layer as a shared bus,
+- attention heads compute in parallel inside each layer,
+- MLPs fan out and fan back in,
+- token positions are a parallel axis orthogonal to depth,
+- information visibly accumulates on the bus as the forward pass progresses.
+
+None of that topology is representable as one chart per stage. Showing the attention
+grid on slide 3 and the MLP heatmap on slide 4 **hides the relationship between them**.
+A learner cannot see that both sub-blocks read from and write to the same residual bus,
+or that L0's output is L1's input, or that T token positions are parallel channels
+sharing heads. The slide deck optimizes for reading; the goal is optimizing for
+understanding the machine.
+
+**The specific failure modes in §18–§20:**
+
+- §18 rejected a React/spatial approach because it "throws away working code." That
+  was correct *relative to the slide-deck target* but wrong once the target shifts.
+  The existing `src/viz/` code and `Stage` explanation text remain useful; only the
+  **React Learn Mode frontend** (not the Streamlit Investigate Mode, not the Python
+  pipeline) is what needs to be re-shaped.
+- §19 defined a clean JSON contract optimized for stage rendering. The contract is
+  good but incomplete: it carries stage text and chart arrays but no scene graph and
+  no per-component activation summaries. It needs an additive extension (`scene.json`),
+  not a replacement.
+- §20 specified a React component tree of chart renderers. Those components are fine
+  as legacy "flat view," but they are not the primary Learn Mode going forward.
+
+**None of the prior work is discarded.** The Phase 2 tracer, the Stage explanation
+text, the JSON manifest, and the Streamlit Investigate Mode are all consumed by the
+spatial viewer. Only the top-level React UX is replaced.
+
+---
+
+### 21.2 The corrected product definition
+
+**The target is a spatial mechanistic viewer, not a dashboard.**
+
+Shape: interactive 3D scene of the transformer. The learner sees the whole model,
+can rotate / zoom / pan, click into components, watch activity unfold layer by
+layer, and drill down into subcomponents.
+
+Closest familiar references:
+- **Game-engine runtime inspector** (e.g., Unity scene view with the scrub bar).
+- **CAD assembly viewer** (explode to see subparts).
+- **Digital oscilloscope** (scrub through time-axis of a recorded signal).
+
+Explicitly **not** like:
+- A dashboard (multiple decorative charts in a grid).
+- A slide deck (one chart per state, advance button).
+- A biology viewer (anatomy metaphors are forbidden).
+
+Primary user experience:
+- Load a traced example.
+- See the whole model laid out spatially.
+- Watch the forward pass play back at a learner-controlled speed, independent of
+  compute speed (playback is a scrub over precomputed trace data).
+- Rotate, zoom, pan, click, hover, isolate, explode.
+- Read plain-language inspector panels tied to the selected component.
+- Access technical tensor detail without leaving the scene.
+- Eventually (later slices): inspect polysemantic neurons, overlay SAE features,
+  compare inputs — honestly, with no claimed biological semantics.
+
+---
+
+### 21.3 The right visual metaphor
+
+**Instrumented pipeline on a residual bus.** Full rationale in
+`docs/architecture/spatial_visualization.md §B`.
+
+Summary:
+- **Residual stream = visible bus** running through every layer. T parallel channels
+  (one per token position).
+- **Layers = stacked modules** along the bus.
+- **Attention block and MLP block = sub-stations** inside each layer that tap the
+  bus, compute, and write an additive update back.
+- **Heads = parallel sub-units** inside the attention block, reachable by exploding.
+- **MLP neurons = grid inside the MLP block**, reachable by drilling in.
+- **Playback = a computation cursor** advancing along the depth axis.
+
+Why this metaphor is faithful:
+- It matches the actual math (`resid = resid + attn_out + mlp_out`).
+- It matches the actual topology (parallel heads, parallel token positions).
+- It matches the actual ordering (strict layer-by-layer forward pass).
+
+What it abstracts (must be declared in the inspector text, not hidden):
+- LayerNorm application before each sub-block.
+- QKV projections inside each head.
+- Softmax (the pattern shown is post-softmax).
+- Causal masking.
+
+Forbidden metaphors:
+- Brain / neural anatomy (false scientific claim).
+- Current-flow electrical animation (misleading continuity).
+- Token-as-traveler animation (misleading separateness — tokens share the bus).
+
+---
+
+### 21.4 Architecture recommendations
+
+**Stack:** extend existing `app/react_learn/` Vite + React + TypeScript project with:
+- `react-three-fiber` (@react-three/fiber)
+- `@react-three/drei`
+- `three` (transitive)
+- `zustand` for scene state
+
+Nothing else. No Redux, no physics engine, no UI kit.
+
+**Data layer:** additive, not breaking. Keep the existing `learn_data/{task}/{trace_id}.json`
+stage package. Add a peer `learn_data/{task}/{trace_id}.scene.json` with scene graph +
+per-component activation ticks. Schema in `docs/architecture/spatial_visualization.md §F`.
+The Python exporter is a new module (`src/viz/export_scene.py`) that reuses existing
+`compute_logit_lens`, `residual_norms`, and `ActivationCache` utilities.
+
+**Frontend structure:**
+
+```
+app/react_learn/src/
+  App.tsx                   [add Spatial / Flat tab toggle]
+  hooks/
+    useLearnData.ts         [also fetch .scene.json]
+    useSpatialStore.ts      [new: zustand]
+  spatial/
+    SpatialViewer.tsx       [R3F Canvas + overlay DOM]
+    scene/                  [R3F components: bus, layers, attn, mlp, cursor, plates]
+    overlay/                [DOM: inspector, playback bar, tooltip, breadcrumb]
+    logic/                  [pure: selection, tickMapping, colorScale]
+  components/               [existing flat-view components, untouched]
+```
+
+**Mode discipline:**
+- Spatial viewer = primary Learn Mode.
+- Existing stage-player = "Flat view" fallback, kept one tab away.
+- Streamlit Investigate Mode = technical depth; linked out to by name, not replaced.
+
+---
+
+### 21.5 What Sonnet must build first (slice 1 only)
+
+From `docs/architecture/spatial_visualization.md §H`, steps A through E:
+
+- **A. Spatial scene shell.** Static model laid out in 3D; camera works; no
+  activations, no playback.
+- **B. Scene export + activation-driven intensity.** `scene.json` exporter
+  delivers per-component activation summaries; meshes' visible intensity is driven
+  by real trace data.
+- **C. Selection + inspector panel.** Click a component; inspector shows reused
+  stage explanation text + a "View in Streamlit" link.
+- **D. Playback.** Layer-wise cursor; prev/next/play/pause/reset; speed slider;
+  below-cursor components are active, above are latent.
+- **E. Isolate + camera polish.** Solo-a-component mode; "focus selected" button;
+  keyboard shortcuts; loading/error states that preserve the scene.
+
+Acceptance gate is defined in `docs/architecture/spatial_visualization.md §I` —
+ten concrete criteria, all must hold.
+
+---
+
+### 21.6 What Sonnet must explicitly NOT build yet
+
+- **Exploded layer view** (heads fanned out) — slice 2.
+- **Neuron / feature grid view** — slice 3.
+- **Phase 4 ablation or intervention controls.** The viewer is read-only in
+  slice 1. Do not add "what if you zeroed this head" controls. The moment the
+  UI suggests a mutable model, we have leaked Phase 4 scope.
+- **Phase 5 checkpoint comparison.** One trace at a time.
+- **Phase 6 SAE feature overlays.**
+- **Phase 8 pretrained models.**
+- **Custom user token entry that re-runs the Python model from the browser.**
+  Input to the viewer is the pre-exported demo traces. Live prompting is a
+  later concern.
+- **Replacing Streamlit Investigate Mode.** Do not port the 6 Streamlit views.
+- **Mobile / touch support.** Desktop-first.
+- **Animation polish, particle effects, audio.** Functional first.
+- **A new charting library.** The spatial viewer uses R3F. The flat view already
+  uses custom SVG. Do not introduce a third rendering path.
+- **Tokenizer or NL rendering.** Integer token labels only.
+- **Biological metaphors anywhere in the scene or inspector text.**
+
+---
+
+### 21.7 Why this is the right correction to make now
+
+Prior Learn Mode iterations improved craft but preserved the wrong shape. The
+project's stated goal is **understanding**, not tensor display. Slide-deck
+rendering teaches charts, not mechanisms. The spatial viewer is the first
+product shape that actually demands the learner model the transformer as a
+machine, not as a pile of heatmaps.
+
+The technical cost is modest:
+- The Python data pipeline is reused.
+- The Phase 3C flat viewer is retained as a fallback, not thrown away.
+- Streamlit remains the technical-depth layer.
+- New code is scoped to `app/react_learn/src/spatial/` + one Python exporter.
+
+The risk of *not* making this correction: the Learn Mode stays permanently
+short of the project's stated principle (Learning first, PROJECT_PLAN §2) and
+each later phase (interventions, checkpoint evolution, features) inherits the
+slide-deck shape.
+
+---
+
+### 21.8 Cross-cutting rules that still apply
+
+- **No silent rule changes.** Any edit to `CLAUDE.md` needs a proposal (CLAUDE.md §).
+- **No Phase 4 work in this slice.** Interventions are causality, not visualization.
+- **Role discipline.** Sonnet implements; Opus reviews. §12-style independent
+  verification at slice-1 close.
+- **File-based context.** `implementation_status.md` gets appended as Sonnet works.
+  `open_questions.md` gets new entries for decisions that arise (e.g., color
+  scale choice, tick granularity for L ≥ 4).
+- **Out-of-scope drift flags.** If Sonnet sees itself about to build an exploded
+  view, a neuron grid, or an ablation control inside slice 1, it must stop and
+  note the drift in `next_actions.md` instead of shipping it.

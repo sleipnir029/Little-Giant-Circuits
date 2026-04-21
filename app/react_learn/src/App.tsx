@@ -1,7 +1,10 @@
 import { useState } from 'react'
 import { useLearnData } from './hooks/useLearnData'
 import { StagePlayer } from './components/StagePlayer'
+import { SpatialViewer } from './spatial/SpatialViewer'
 import type { ManifestEntry } from './types'
+
+type ViewMode = 'spatial' | 'flat'
 
 const TASK_DESCRIPTIONS: Record<string, string> = {
   induction: 'Pattern completion — given [A B … A], predict B',
@@ -17,6 +20,7 @@ export default function App() {
     useLearnData()
 
   const [selectedEntry, setSelectedEntry] = useState<ManifestEntry | null>(null)
+  const [viewMode, setViewMode] = useState<ViewMode>('spatial')
 
   function handleSelect(entry: ManifestEntry) {
     setSelectedEntry(entry)
@@ -56,6 +60,40 @@ export default function App() {
           >
             Learn Mode
           </span>
+        </div>
+
+        {/* View mode tab toggle */}
+        <div
+          style={{
+            display: 'flex',
+            gap: 2,
+            background: '#f0f4ff',
+            borderRadius: 7,
+            padding: 2,
+            border: '1px solid #dde3f0',
+          }}
+        >
+          {(['spatial', 'flat'] as ViewMode[]).map((mode) => (
+            <button
+              key={mode}
+              onClick={() => setViewMode(mode)}
+              style={{
+                padding: '4px 14px',
+                fontSize: 12,
+                fontWeight: 600,
+                borderRadius: 5,
+                border: 'none',
+                cursor: 'pointer',
+                background: viewMode === mode ? '#fff' : 'transparent',
+                color: viewMode === mode ? '#1e2a3a' : '#9BA8C0',
+                boxShadow: viewMode === mode ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                transition: 'all 0.12s',
+                textTransform: 'capitalize',
+              }}
+            >
+              {mode === 'spatial' ? 'Spatial' : 'Flat'}
+            </button>
+          ))}
         </div>
 
         <div style={{ flex: 1 }} />
@@ -99,8 +137,14 @@ export default function App() {
         </a>
       </header>
 
-      {/* Main content */}
-      <main style={{ maxWidth: 1100, margin: '0 auto', padding: '24px 16px' }}>
+      {/* Main content — Spatial view fills full viewport height, Flat view is scrollable */}
+      <main
+        style={
+          viewMode === 'spatial'
+            ? { height: 'calc(100vh - 56px)', display: 'flex', flexDirection: 'column' }
+            : { maxWidth: 1100, margin: '0 auto', padding: '24px 16px' }
+        }
+      >
         {/* Error: manifest failed to load */}
         {manifestError && (
           <div
@@ -145,26 +189,6 @@ python scripts/export_learn_stages.py`}
           </div>
         )}
 
-        {/* Task description */}
-        {selectedPackage && !loadingPackage && (
-          <div
-            style={{
-              background: '#eef1fe',
-              borderRadius: 8,
-              padding: '10px 16px',
-              marginBottom: 16,
-              fontSize: 13,
-              color: '#3730a3',
-            }}
-          >
-            <strong>{selectedPackage.task}:</strong>{' '}
-            {TASK_DESCRIPTIONS[selectedPackage.task] ?? 'Toy synthetic task'}
-            <span style={{ color: '#6366f1', marginLeft: 12 }}>
-              {selectedPackage.n_layers}-layer model · d_model={selectedPackage.d_model} · {selectedPackage.n_heads} heads
-            </span>
-          </div>
-        )}
-
         {/* Package loading */}
         {loadingPackage && (
           <div style={{ textAlign: 'center', padding: 60, color: '#9BA8C0' }}>
@@ -182,35 +206,65 @@ python scripts/export_learn_stages.py`}
               padding: 16,
               color: '#c53030',
               fontSize: 13,
+              margin: viewMode === 'spatial' ? '16px' : undefined,
             }}
           >
             Failed to load package: {packageError}
           </div>
         )}
 
-        {/* Stage player */}
-        {selectedPackage && !loadingPackage && !packageError && (
-          <StagePlayer pkg={selectedPackage} />
+        {/* Spatial view — fills remaining height */}
+        {viewMode === 'spatial' && selectedPackage && !loadingPackage && !packageError && (
+          <div style={{ flex: 1, minHeight: 0 }}>
+            <SpatialViewer pkg={selectedPackage} />
+          </div>
         )}
 
-        {/* Footer */}
-        <footer
-          style={{
-            marginTop: 32,
-            paddingTop: 16,
-            borderTop: '1px solid #e2e8f0',
-            fontSize: 12,
-            color: '#9BA8C0',
-            textAlign: 'center',
-          }}
-        >
-          Learn Mode shows a single forward pass, stage by stage. For full technical
-          inspection (all layers, attention patterns, MLP neurons, logit evolution), use{' '}
-          <a href="http://localhost:8501" target="_blank" rel="noopener noreferrer" style={{ color: '#4f6ef7' }}>
-            Investigate Mode in Streamlit
-          </a>
-          .
-        </footer>
+        {/* Flat view — task description + stage player + footer */}
+        {viewMode === 'flat' && (
+          <>
+            {selectedPackage && !loadingPackage && (
+              <div
+                style={{
+                  background: '#eef1fe',
+                  borderRadius: 8,
+                  padding: '10px 16px',
+                  marginBottom: 16,
+                  fontSize: 13,
+                  color: '#3730a3',
+                }}
+              >
+                <strong>{selectedPackage.task}:</strong>{' '}
+                {TASK_DESCRIPTIONS[selectedPackage.task] ?? 'Toy synthetic task'}
+                <span style={{ color: '#6366f1', marginLeft: 12 }}>
+                  {selectedPackage.n_layers}-layer model · d_model={selectedPackage.d_model} · {selectedPackage.n_heads} heads
+                </span>
+              </div>
+            )}
+
+            {selectedPackage && !loadingPackage && !packageError && (
+              <StagePlayer pkg={selectedPackage} />
+            )}
+
+            <footer
+              style={{
+                marginTop: 32,
+                paddingTop: 16,
+                borderTop: '1px solid #e2e8f0',
+                fontSize: 12,
+                color: '#9BA8C0',
+                textAlign: 'center',
+              }}
+            >
+              Learn Mode shows a single forward pass, stage by stage. For full technical
+              inspection (all layers, attention patterns, MLP neurons, logit evolution), use{' '}
+              <a href="http://localhost:8501" target="_blank" rel="noopener noreferrer" style={{ color: '#4f6ef7' }}>
+                Investigate Mode in Streamlit
+              </a>
+              .
+            </footer>
+          </>
+        )}
       </main>
     </div>
   )

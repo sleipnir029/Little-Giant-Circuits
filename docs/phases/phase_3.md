@@ -479,3 +479,91 @@ app/react_learn/
 - `src/viz/stages.py`, `src/viz/plotting.py` — unchanged
 
 React adds a second frontend; it does not replace Streamlit.
+
+---
+
+## Phase 3D — Spatial Mechanistic Viewer (Step A)
+
+**Status:** Step A COMPLETE (2026-04-21)
+**Implementing:** Sonnet
+**Spec:** `docs/proposals/spatial_viewer_plan.md` (Slice 1, Step A only)
+**Architecture:** `docs/architecture/spatial_visualization.md`
+**Advisory:** `docs/phase_context/review_notes.md §21`
+
+### What Was Built
+
+Step A delivers the static spatial 3D scene shell — the transformer as an instrumented
+pipeline on a residual bus. No activations, no playback, no inspector panel.
+
+**New dependencies added to `app/react_learn/package.json`:**
+- `three ^0.169.0`
+- `@react-three/fiber ^8.17.10` (R3F — declarative Three.js)
+- `@react-three/drei ^9.122.0` (helpers: OrbitControls, Html labels)
+- `zustand ^5.0.2` (global scene state)
+- `@types/three ^0.169.0` (devDep)
+
+**New TypeScript files:**
+
+| File | Purpose |
+|------|---------|
+| `src/hooks/useSpatialStore.ts` | Zustand store: selectedId, hoveredId, resetTick |
+| `src/spatial/logic/sceneConfig.ts` | Geometry constants + Y-position helpers |
+| `src/spatial/logic/colorScale.ts` | Step B placeholder |
+| `src/spatial/logic/selection.ts` | Step C placeholder |
+| `src/spatial/scene/EmbedPlate.tsx` | Blue plate at y=0 |
+| `src/spatial/scene/UnembedPlate.tsx` | Purple plate at top |
+| `src/spatial/scene/AttentionBlock.tsx` | Blue inner box per layer |
+| `src/spatial/scene/MlpBlock.tsx` | Teal inner box per layer |
+| `src/spatial/scene/LayerModule.tsx` | Outer shell + Attn + MLP stacked |
+| `src/spatial/scene/ResidualBus.tsx` | T translucent cylinders full height |
+| `src/spatial/scene/SceneRoot.tsx` | Assembles all scene components |
+| `src/spatial/SpatialViewer.tsx` | R3F Canvas + OrbitControls + CameraController |
+
+**Modified:**
+- `src/App.tsx` — Spatial | Flat tab toggle (Spatial = default)
+
+### Scene Design
+
+- **Y=up convention**: Embed at y=0, computation flows upward, Unembed at top
+- **Z depth**: Boxes have real Z extent (1.0 units) — they read as 3D machine when orbited
+- **Residual bus**: T translucent cylinders (#7eb0f5, opacity 0.35) running full Y range
+- **Color palette**: Embed #1d4ed8 (blue), Attn #1e40af (navy), MLP #0d6b63 (teal),
+  Unembed #7c3aed (purple), background #0f1117 (near-black)
+- **Labels**: drei `<Html>` overlay (not `<Text>` — avoids font/troika asset loading)
+- **CameraController**: Component inside Canvas that uses `useThree()` to set camera
+  position + controls target correctly on reset (avoids OrbitControls.saveState() timing bug)
+
+### Interactions Verified
+
+| Interaction | Status |
+|------------|--------|
+| Orbit (drag) | PASS |
+| Zoom | PASS |
+| Pan | PASS |
+| Reset camera (restores home view) | PASS |
+| Hover → color highlight | PASS |
+| Click → selection (color change) | PASS |
+| Click empty space → deselect | PASS |
+| Task switch reshapes scene | PASS |
+| Spatial → Flat tab (Phase 3C preserved) | PASS |
+
+### Browser Validation
+
+- All 6 tasks load: induction (T=7), kv_retrieval (T=7), modular_arith (T=2),
+  bracket_match (T=15), factual_lookup (T=1), sorting (T=5)
+- Zero JS console errors across all tasks (only favicon 404, a non-issue)
+- Flat tab: Phase 3C StagePlayer fully functional with no regressions
+
+### Step A Exit Criterion (from spec §H)
+
+> "Scene renders for all 6 existing packages. Rotate / zoom / pan work.
+>  Labels are readable. Legacy Flat tab is one click away."
+
+**MET.**
+
+### Deferred to Steps B–E
+
+- Step B: `src/viz/export_scene.py`, `.scene.json` export, activation intensity binding
+- Step C: InspectorPanel, HoverTooltip, selection→explanation wiring
+- Step D: PlaybackBar, PlaybackCursor, tick-by-tick animation
+- Step E: Isolate toggle, focus-selected camera tween, keyboard shortcuts, loading states

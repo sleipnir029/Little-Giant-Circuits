@@ -5,6 +5,47 @@ Each entry: date, what was built, which plan section it satisfies, what remains.
 
 ---
 
+## 2026-04-21 — Phase 3D Step A — Spatial Scene Shell (Sonnet)
+
+**Satisfies:** `docs/proposals/spatial_viewer_plan.md §2 Step A`
+
+**What was built:**
+
+New deps added to `app/react_learn/package.json`: three, @react-three/fiber, @react-three/drei,
+zustand, @types/three.
+
+New spatial subtree `app/react_learn/src/spatial/`:
+- `logic/sceneConfig.ts` — Y-up geometry constants and position helpers (layerY, unembedY,
+  busBottomY/Top, tokenX, sceneMidY)
+- `logic/colorScale.ts` — Step B placeholder
+- `logic/selection.ts` — Step C placeholder
+- `scene/EmbedPlate.tsx` — selectable blue plate at y=0 with Html label
+- `scene/UnembedPlate.tsx` — selectable purple plate at top with Html label
+- `scene/AttentionBlock.tsx` — selectable navy inner box, hover + selected states
+- `scene/MlpBlock.tsx` — selectable teal inner box, hover + selected states
+- `scene/LayerModule.tsx` — transparent outer shell housing Attn + MLP
+- `scene/ResidualBus.tsx` — T translucent cylinders spanning full Y
+- `scene/SceneRoot.tsx` — EmbedPlate + N LayerModules + UnembedPlate + ResidualBus
+- `SpatialViewer.tsx` — R3F Canvas + OrbitControls + CameraController + DOM overlay
+
+New store: `src/hooks/useSpatialStore.ts` — selectedId, hoveredId, resetTick, triggerReset.
+
+Modified `src/App.tsx`: Spatial | Flat tab toggle (Spatial = default, Flat = Phase 3C StagePlayer).
+
+**Browser validation:**
+- All 6 tasks render without errors (T=1 to T=15)
+- Rotate / zoom / pan / reset all work (CameraController fix needed for correct target on reset)
+- Hover highlighting and click selection functional
+- Flat tab: Phase 3C StagePlayer fully preserved, zero regressions
+- Console: only favicon 404 (non-issue)
+
+**Remains for Step B:** export_scene.py, .scene.json, activation intensity binding
+**Remains for Step C:** InspectorPanel, HoverTooltip, explanation wiring
+**Remains for Step D:** PlaybackBar, PlaybackCursor, tick animation
+**Remains for Step E:** isolate, focus-camera, keyboard shortcuts, loading states
+
+---
+
 ## 2026-04-21 — Phase 3C — React Learn Mode UI (Sonnet)
 
 **What was built:**

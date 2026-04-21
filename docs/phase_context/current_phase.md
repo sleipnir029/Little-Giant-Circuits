@@ -1,11 +1,14 @@
 # Current Phase
 
 ## Active Phase
-Phase 3C — React Learn Mode UI
+Phase 3D — Spatial Mechanistic Viewer
 
-**Status:** COMPLETE
+**Status:** Step A COMPLETE — awaiting Opus review before Step B
 **Started:** 2026-04-21
-**Completed:** 2026-04-21
+**Step A completed:** 2026-04-21
+
+**Predecessor:**
+Phase 3C — React Learn Mode UI: COMPLETE (2026-04-21)
 
 **Predecessor phases:**
 - Phase 3 technical UI: COMPLETE (2026-04-21)
